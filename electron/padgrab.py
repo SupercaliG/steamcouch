@@ -20,6 +20,12 @@ import sys
 import time
 
 EVIOCGRAB = 0x40044590
+KEY_BYTES = 96  # KEY_MAX 0x2ff -> 768 bits
+EVIOCGKEY = (2 << 30) | (KEY_BYTES << 16) | (ord("E") << 8) | 0x18  # _IOC_READ
+# Gamepad buttons (BTN_SOUTH..BTN_THUMBR) and the d-pad buttons.
+HELD_CODES = list(range(304, 319)) + list(range(544, 548))
+# Longest wait for the Home press to be let go before grabbing anyway.
+PRESS_WAIT_S = 1.5
 EVENT = struct.Struct("llHHi")  # struct input_event on 64-bit Linux
 EV_KEY, EV_ABS = 0x01, 0x03
 
@@ -53,22 +59,45 @@ def emit(line: str) -> None:
     sys.stdout.flush()
 
 
+def buttons_down(fd: int) -> bool:
+    """True if any gamepad button on this device is held right now."""
+    buf = bytearray(KEY_BYTES)
+    try:
+        fcntl.ioctl(fd, EVIOCGKEY, buf)
+    except OSError:
+        return False
+    bits = int.from_bytes(buf, "little")
+    return any(bits >> code & 1 for code in HELD_CODES)
+
+
 def main() -> None:
     fds = {}
     for name in sorted(os.listdir("/dev/input")):
         if not name.startswith("event") or not is_gamepad(name):
             continue
         try:
-            fd = os.open(f"/dev/input/{name}", os.O_RDONLY | os.O_NONBLOCK)
+            fds[os.open(f"/dev/input/{name}", os.O_RDONLY | os.O_NONBLOCK)] = name
         except OSError:
             continue
+
+    # The menu opens on the Home press, while Home is still held. Grabbing now
+    # would hide the release from Steam: Steam then thinks Home is held forever
+    # and turns every press into a Home shortcut (screenshot, zoom, ...), and
+    # the game gets nothing. So wait until the buttons are let go first.
+    deadline = time.monotonic() + PRESS_WAIT_S
+    while any(buttons_down(fd) for fd in fds) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    for fd in fds:
+        try:
+            os.read(fd, EVENT.size * 256)  # drop the Home press and release
+        except OSError:
+            pass
         try:
             fcntl.ioctl(fd, EVIOCGRAB, 1)
         except OSError:
             # Someone else holds it (InputPlumber holds the physical pad);
             # we still read it to know when buttons are released.
             pass
-        fds[fd] = name
     emit("grabbed " + " ".join(fds.values()))
 
     # Keyed by code, not device: the same press can arrive on more than one
