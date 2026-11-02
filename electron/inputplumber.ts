@@ -45,53 +45,85 @@ async function compositeDevices(): Promise<string[]> {
   return [...new Set(tree.match(/\/org\/shadowblip\/InputPlumber\/CompositeDevice\d+(?=\s|$)/gm) ?? [])];
 }
 
+/** How often to look for controllers that InputPlumber picked up or dropped. */
+const POLL_MS = 2000;
+
 export function createInputPlumber(log: (msg: string) => void) {
   let monitor: ChildProcess | null = null;
+  let poller: NodeJS.Timeout | null = null;
   const held = new Set<string>();
+  // Controllers InputPlumber manages now, and the mode they should be in.
+  // A controller that is off when the dashboard starts shows up later.
+  let known = new Set<string>();
+  let mode = MODE_PASS;
 
-  async function setMode(mode: number) {
-    for (const dev of await compositeDevices()) {
-      await run("busctl", ["--system", "set-property", SERVICE, dev, IFACE, "InterceptMode", "u", String(mode)]);
+  const apply = (dev: string, m: number) =>
+    run("busctl", ["--system", "set-property", SERVICE, dev, IFACE, "InterceptMode", "u", String(m)]);
+
+  async function setMode(m: number) {
+    mode = m;
+    known = new Set(await compositeDevices());
+    for (const dev of known) await apply(dev, m);
+    log(`inputplumber: intercept mode ${m}`);
+  }
+
+  async function poll(onAction: (action: string) => void) {
+    const now = new Set(await compositeDevices());
+    for (const dev of now) {
+      if (known.has(dev)) continue;
+      await apply(dev, mode);
+      log(`inputplumber: controller ${dev.split("/").pop()} found, intercept mode ${mode}`);
     }
-    log(`inputplumber: intercept mode ${mode}`);
+    if (known.size > 0 && now.size === 0) log("inputplumber: no controller");
+    known = now;
+    if (known.size > 0) startMonitor(onAction);
+  }
+
+  function startMonitor(onAction: (action: string) => void) {
+    if (monitor) return;
+    monitor = spawn("gdbus", ["monitor", "--system", "--dest", SERVICE, "--object-path", DBUS_TARGET], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    let buffer = "";
+    monitor.stdout?.on("data", (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        // .../dbus0: org.shadowblip.Input.DBusDevice.InputEvent ('ui_guide', 1.0)
+        const m = /InputEvent \('([^']+)', ([-\d.]+)\)/.exec(line);
+        if (!m) continue;
+        const [, event, value] = m;
+        const pressed = Number(value) > 0.5;
+        if (pressed) held.add(event!);
+        else held.delete(event!);
+        if (event === "ui_guide") log(`inputplumber: Home ${pressed ? "pressed" : "released"}`);
+        const action = EVENTS[event!];
+        if (action && pressed) onAction(action);
+      }
+    });
+    monitor.on("exit", () => {
+      monitor = null;
+      log("inputplumber: monitor stopped");
+    });
   }
 
   return {
     setMode,
 
     /** True when InputPlumber manages at least one controller. */
-    async available() {
-      return (await compositeDevices()).length > 0;
+    active() {
+      return known.size > 0;
     },
 
-    /** Listen for D-Bus input events; `onAction` gets dashboard actions on press. */
-    start(onAction: (action: string) => void) {
-      if (monitor) return;
-      monitor = spawn("gdbus", ["monitor", "--system", "--dest", SERVICE, "--object-path", DBUS_TARGET], {
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-      let buffer = "";
-      monitor.stdout?.on("data", (chunk: Buffer) => {
-        buffer += chunk.toString();
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          // .../dbus0: org.shadowblip.Input.DBusDevice.InputEvent ('ui_guide', 1.0)
-          const m = /InputEvent \('([^']+)', ([-\d.]+)\)/.exec(line);
-          if (!m) continue;
-          const [, event, value] = m;
-          const pressed = Number(value) > 0.5;
-          if (pressed) held.add(event!);
-          else held.delete(event!);
-          if (event === "ui_guide") log(`inputplumber: Home ${pressed ? "pressed" : "released"}`);
-          const action = EVENTS[event!];
-          if (action && pressed) onAction(action);
-        }
-      });
-      monitor.on("exit", () => {
-        monitor = null;
-        log("inputplumber: monitor stopped");
-      });
+    /**
+     * Track controllers and listen for D-Bus input events; `onAction` gets
+     * dashboard actions on press. Safe to call when InputPlumber is absent.
+     */
+    async start(onAction: (action: string) => void) {
+      if (poller) return;
+      await poll(onAction);
+      poller = setInterval(() => void poll(onAction), POLL_MS);
     },
 
     /** Wait (up to 1.5 s) until no button is held, so a release is not sent to the game. */
@@ -102,6 +134,8 @@ export function createInputPlumber(log: (msg: string) => void) {
     },
 
     stop() {
+      if (poller) clearInterval(poller);
+      poller = null;
       monitor?.kill();
       monitor = null;
     },

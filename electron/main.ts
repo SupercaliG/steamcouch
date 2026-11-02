@@ -54,19 +54,17 @@ const log = (msg: string) => console.log(`[steamcouch] ${msg}`);
 // intercept mode sends Home to us and, while the menu is open, every press
 // (see inputplumber.ts). Without it, padgrab.py holds the gamepads instead.
 const plumber = createInputPlumber(log);
-let usePlumber = false;
 const sendPad = (action: string) => win?.webContents.send("pad", action);
 
 async function menuInput() {
-  if (usePlumber) await plumber.setMode(MODE_ALL);
+  if (plumber.active()) await plumber.setMode(MODE_ALL);
   else if (!grab && existsSync(PADGRAB)) grab = startPadGrab(PADGRAB, sendPad);
 }
 
 async function normalInput() {
-  if (usePlumber) {
-    await plumber.waitForRelease(); // the press that closed the menu stays out of the game
-    await plumber.setMode(MODE_PASS);
-  } else await releaseGrab();
+  await releaseGrab();
+  if (plumber.active()) await plumber.waitForRelease(); // the press that closed the menu stays out of the game
+  await plumber.setMode(MODE_PASS);
 }
 
 /** Never leave the controller captured when the dashboard exits. */
@@ -208,14 +206,11 @@ app.whenReady().then(() => {
   w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   void w.loadURL("app://ui/index.html");
 
-  // Home button through InputPlumber, when it manages the controller.
-  void (async () => {
-    usePlumber = await plumber.available();
-    log(usePlumber ? "inputplumber: found, using intercept mode" : "inputplumber: not found, using padgrab");
-    if (!usePlumber) return;
-    await plumber.setMode(MODE_PASS);
-    plumber.start(sendPad);
-  })();
+  // Home button through InputPlumber, when it manages a controller. It keeps
+  // looking, so a controller turned on after the dashboard starts works too.
+  void plumber.start(sendPad).then(() =>
+    log(plumber.active() ? "inputplumber: using intercept mode" : "inputplumber: no controller yet"),
+  );
 });
 
 app.on("window-all-closed", () => app.quit());
