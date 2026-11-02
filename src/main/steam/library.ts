@@ -78,6 +78,7 @@ export function readLibrary(opts: LibraryOptions): Library {
       lastPlayed: stats?.lastPlayed,
       playtimeMinutes: stats?.minutes,
       launch: { type: "steam", gameId: String(appId) },
+      controller: playableWithController(info!),
     });
   }
 
@@ -107,6 +108,17 @@ function findAccountId(steamDir: string): string | undefined {
 }
 
 // --------------------------------------------------------------- steam apps
+
+/**
+ * Steam's own data: the developer's controller support ("full"/"partial"),
+ * or a Steam Deck rating of Playable (2) or Verified (3), which Valve only
+ * gives games that work with the Deck's controls.
+ */
+function playableWithController(info: VdfObject): boolean {
+  const support = getString(info, "common", "controller_support")?.toLowerCase();
+  const deck = getString(info, "common", "steam_deck_compatibility", "category");
+  return support === "full" || support === "partial" || deck === "2" || deck === "3";
+}
 
 function readAppInfo(steamDir: string): Map<number, VdfObject> {
   const file = join(steamDir, "appcache", "appinfo.vdf");

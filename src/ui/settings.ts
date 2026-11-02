@@ -1,6 +1,14 @@
 import { clamp, h, img } from "../dom";
 import type { Action } from "../input";
-import { allProfiles, allTitles, getProfile, setAllowed, setPin } from "../store";
+import {
+  allProfiles,
+  allTitles,
+  controllerOnly,
+  getProfile,
+  setAllowed,
+  setControllerOnly,
+  setPin,
+} from "../store";
 import type { Profile, Title, TitleKind } from "../types";
 import { pinPad } from "./pin";
 import { avatar, toast, type Overlay, type OverlayHost } from "./screen";
@@ -200,7 +208,16 @@ export function settingsOverlay(host: OverlayHost, onChanged: () => void): Overl
   push(
     menuView("Settings", () => {
       const profiles = allProfiles();
+      const hidden = allTitles().filter((t) => t.kind === "game" && t.controller === false).length;
       return [
+        {
+          label: "Only show controller games",
+          detail: controllerOnly() ? `On · ${hidden} hidden` : "Off",
+          run: () => {
+            setControllerOnly(!controllerOnly());
+            views[views.length - 1]?.render();
+          },
+        },
         ...profiles
           .filter((p) => p.restricted)
           .map(

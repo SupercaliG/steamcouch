@@ -17,6 +17,8 @@ interface SavedSettings {
   profiles: Record<string, Partial<ProfileSettings>>;
   /** Titles started from the dashboard, unix seconds (Steam updates its own copy later). */
   lastPlayed: Record<string, number>;
+  /** Hide games that cannot be played with a controller. On unless turned off in Settings. */
+  controllerOnly?: boolean;
 }
 
 const LOCAL_KEY = "steamcouch.settings";
@@ -84,8 +86,22 @@ export function canSee(profile: Profile, titleId: string): boolean {
   return !profile.restricted || profile.allow.includes(titleId);
 }
 
+/** True while games without controller support are hidden (the default). */
+export function controllerOnly(): boolean {
+  return settings.controllerOnly !== false;
+}
+
+export function setControllerOnly(on: boolean): void {
+  settings.controllerOnly = on;
+  persist();
+}
+
+/** Titles a profile sees on Home and in the library. */
 export function visibleTitles(profile: Profile): Title[] {
-  return allTitles().filter((t) => canSee(profile, t.id));
+  const hideNoController = controllerOnly();
+  return allTitles().filter(
+    (t) => canSee(profile, t.id) && !(hideNoController && t.kind === "game" && t.controller === false),
+  );
 }
 
 /**

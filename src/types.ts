@@ -26,6 +26,12 @@ export interface Title {
   source: "Steam" | "Non-Steam" | "Recomp" | "App";
   /** False for owned Steam games that are not installed. */
   installed: boolean;
+  /**
+   * False when Steam says the game cannot be played with a controller (no
+   * controller support and not rated Verified/Playable on Steam Deck).
+   * Undefined (shortcuts, apps) counts as playable.
+   */
+  controller?: boolean;
   /** `steam steam://rungameid/<gameId>` starts it (and installs if needed). */
   launch: { type: "steam"; gameId: string };
 }
