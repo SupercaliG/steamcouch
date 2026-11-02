@@ -38,6 +38,7 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
   background: radial-gradient(90% 80% at 50% 40%, #0d1638 0%, #060a1c 55%, #03040b 100%);
 }
 .waves-wrap { position: absolute; inset: 0; opacity: 0.9; }
+.particles { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .waves { width: 100%; height: 100%; }
 .wave { fill: none; stroke-linecap: round; filter: blur(0.6px); }
 .wave-0 { stroke: rgba(70, 110, 255, 0.55); stroke-width: 2.5; animation: drift 18s ease-in-out infinite alternate; }
