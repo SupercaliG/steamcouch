@@ -97,6 +97,9 @@ async function releaseGrab() {
 }
 
 /** gamescope app id for a Steam game id (shortcuts carry it in the top 32 bits). */
+/** Big Picture must be open before a store link, or the link opens in the desktop client. */
+const STORE_LINK_DELAY_MS = 1500;
+
 function appIdFor(gameId: string): number {
   const id = BigInt(gameId);
   return id > 0xffffffffn ? Number(id >> 32n) : Number(id);
@@ -123,6 +126,20 @@ const handleApi = createApi({
     },
   },
   input: { menu: menuInput, normal: normalInput },
+  // Store pages open in Steam's Big Picture store, which works with a
+  // controller and has the Buy button. Home brings the dashboard back.
+  steamStore: {
+    open: async (appId) => {
+      await focus.showSteamUi();
+      run("steam", ["steam://open/bigpicture"]);
+      setTimeout(() => run("steam", [`steam://store/${appId}`]), STORE_LINK_DELAY_MS);
+    },
+    close: async () => {
+      // Back to the hidden desktop client, which ignores the controller.
+      run("steam", ["steam://close/bigpicture"]);
+      await focus.reset();
+    },
+  },
   power: (action: PowerAction) => {
     if (action === "steam-window") {
       // Bring Steam's own window forward (sign-in, downloads, settings).

@@ -2,11 +2,22 @@ import "@fontsource-variable/inter";
 import "./styles.css";
 import { h } from "./dom";
 import { startInput, type Action } from "./input";
-import { allProfiles, gameAction, gameRunning, getProfile, launchTitle as startTitle, loadLibrary, power } from "./store";
+import {
+  allProfiles,
+  closeStorePage,
+  gameAction,
+  gameRunning,
+  getProfile,
+  launchTitle as startTitle,
+  loadLibrary,
+  openStorePage,
+  power,
+} from "./store";
 import type { Profile, Title } from "./types";
 import { controlCenter } from "./ui/control-center";
 import { homeScreen } from "./ui/home";
 import { profileScreen } from "./ui/profiles";
+import { shopScreen } from "./ui/shop";
 import { toast, type Screen } from "./ui/screen";
 
 // Fixed 1920x1080 canvas scaled to fit the window, like a console output.
@@ -47,8 +58,37 @@ function showHome(profile: Profile) {
     homeScreen(profile, {
       onSwitchProfile: showProfiles,
       onLaunch: launchTitle,
+      onOpenStore: () => showStore(profile),
     }),
   );
+}
+
+function showStore(profile: Profile) {
+  if (profile.restricted) return;
+  show(
+    shopScreen({
+      onBack: () => showHome(profile),
+      onOpenInSteam: async (item) => {
+        await openStorePage(item.appId);
+        inSteamStore = true;
+      },
+    }),
+  );
+}
+
+// ---------------------------------------------------------------- Steam store page
+//
+// A store page opens in Steam's own Big Picture store (it has the Buy button).
+// Steam is in front then, so presses are ignored here, like in a game. Home
+// closes it and shows the dashboard's store again.
+
+let inSteamStore = false;
+
+async function leaveSteamStore() {
+  inSteamStore = false;
+  await closeStorePage();
+  // Pressing Home makes InputPlumber hold every press for us; give them back.
+  await inputMode("normal");
 }
 
 // ---------------------------------------------------------------- in game
@@ -171,13 +211,13 @@ async function quit() {
 const bridge = (window as unknown as { steamcouch?: { onPad(cb: (a: string) => void): void } }).steamcouch;
 bridge?.onPad((action) => {
   if (gameMenu) return gameMenu.handle(action as Action);
-  if (action === "home") void openControlCenter();
+  if (action === "home") void (inSteamStore ? leaveSteamStore() : openControlCenter());
 });
 
 startInput((action) => {
   if (gameMenu) return gameMenu.handle(action);
-  if (action === "home") return void openControlCenter();
-  if (inGame) return; // buttons belong to the game
+  if (action === "home") return void (inSteamStore ? leaveSteamStore() : openControlCenter());
+  if (inGame || inSteamStore) return; // buttons belong to the game, or to Steam
   current?.handle(action);
 });
 void loadLibrary().then(showProfiles);

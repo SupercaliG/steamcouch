@@ -50,3 +50,37 @@ export interface Profile {
 }
 
 export type Tab = "games" | "media";
+
+/** A game in the Steam Store (public store data, no account needed). */
+export interface StoreItem {
+  appId: number;
+  name: string;
+  blurb: string;
+  art: {
+    /** 600x900 portrait capsule. */
+    portrait?: string;
+    /** 460x215 header, every game has one. */
+    header: string;
+    /** Wide library hero for the background. */
+    hero?: string;
+  };
+  /** "$24.99", "Free", or undefined when Steam shows no price (unreleased). */
+  price?: string;
+  /** Price before the discount, when on sale. */
+  originalPrice?: string;
+  discountPct?: number;
+  review?: { label: string; percent: number; count: number };
+  tags: string[];
+  /** Unix seconds. */
+  releaseDate?: number;
+  comingSoon: boolean;
+  earlyAccess: boolean;
+  fullController: boolean;
+  deckVerified: boolean;
+}
+
+export interface StoreSection {
+  id: string;
+  title: string;
+  items: StoreItem[];
+}

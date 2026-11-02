@@ -1,5 +1,5 @@
 import { profiles as defaultProfiles, titles as mockTitles } from "./data/mock";
-import type { Profile, Tab, Title } from "./types";
+import type { Profile, StoreItem, StoreSection, Tab, Title } from "./types";
 
 // App data plus per-profile settings (favorites, allow list, passcode).
 // Titles come from the local Steam library (/api/library); the mock list is
@@ -170,4 +170,41 @@ export async function gameAction(action: "home" | "resume" | "quit"): Promise<vo
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action }),
   });
+}
+
+// ---------------------------------------------------------------- Steam Store
+
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+export async function storeDiscover(): Promise<StoreSection[]> {
+  return (await getJson<{ sections: StoreSection[] }>("/api/store/discover")).sections;
+}
+
+export function storeBrowse(filters: string[], start: number): Promise<{ items: StoreItem[]; next: number | null }> {
+  const q = new URLSearchParams({ f: filters.join(","), start: String(start) });
+  return getJson(`/api/store/browse?${q}`);
+}
+
+/** Steam app ids the user already owns (their Steam games in the library). */
+export function ownedAppIds(): Set<number> {
+  return new Set(titles.filter((t) => t.source === "Steam").map((t) => Number(t.launch.gameId)));
+}
+
+/** Show a game's page in Steam's controller-friendly store. */
+export async function openStorePage(appId: number): Promise<void> {
+  const res = await fetch("/api/store/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ appId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+/** Put the dashboard back in front of Steam's store. */
+export async function closeStorePage(): Promise<void> {
+  await fetch("/api/store/close", { method: "POST" }).catch(() => undefined);
 }

@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, sep } from "node:path";
 import { readLibrary, type Library } from "./steam/library.ts";
+import { createSteamStore } from "./steam/store.ts";
 import { fillMissingArt } from "./steam/steamgriddb.ts";
 import { taglineCache } from "./steam/taglines.ts";
 
@@ -28,6 +29,8 @@ export interface ApiConfig {
   system?: SystemControls;
   /** Controller routing while the Control Center is open. Absent in development. */
   input?: { menu(): Promise<void>; normal(): Promise<void> };
+  /** Shows a game's page in Steam's own store, and goes back. Absent in development. */
+  steamStore?: { open(appId: number): Promise<void>; close(): Promise<void> };
 }
 
 export type GameAction = "home" | "resume" | "quit";
@@ -80,6 +83,7 @@ export function createApi(config: ApiConfig) {
   const gridKeyFile = join(config.dataDir, "steamgriddb.key");
   let lib: Library | undefined;
   const system = config.system ?? devSystem();
+  const store = createSteamStore();
 
   const json = (data: unknown, status = 200): ApiResponse => ({
     status,
@@ -212,6 +216,38 @@ export function createApi(config: ApiConfig) {
       }
       config.power?.(action);
       return json({ ok: true, simulated: !config.power });
+    }
+
+    if (method === "GET" && path === "/api/store/discover") {
+      try {
+        return json({ sections: await store.discover() });
+      } catch (err) {
+        return json({ error: String(err) }, 502);
+      }
+    }
+
+    if (method === "GET" && path === "/api/store/browse") {
+      const query = new URLSearchParams(url.split("?")[1] ?? "");
+      const filters = (query.get("f") ?? "").split(",").filter((f) => /^[a-z0-9-]+$/.test(f));
+      const start = Number(query.get("start") ?? 0);
+      if (!Number.isInteger(start) || start < 0 || start > 5000) return json({ error: "bad start" }, 400);
+      try {
+        return json(await store.browse(filters, start));
+      } catch (err) {
+        return json({ error: String(err) }, 502);
+      }
+    }
+
+    if (method === "POST" && path === "/api/store/open" && body) {
+      const { appId } = JSON.parse(body) as { appId?: number };
+      if (!Number.isInteger(appId) || appId! <= 0) return json({ error: "bad appId" }, 400);
+      await config.steamStore?.open(appId!);
+      return json({ ok: true, simulated: !config.steamStore });
+    }
+
+    if (method === "POST" && path === "/api/store/close") {
+      await config.steamStore?.close();
+      return json({ ok: true });
     }
 
     return json({ error: "not found" }, 404);

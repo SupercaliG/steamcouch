@@ -30,7 +30,7 @@ const GAP = 10;
 const ANCHOR_X = 170;
 const LABEL_GAP = 16;
 
-type RowItem = { type: "title"; title: Title } | { type: "library" };
+type RowItem = { type: "title"; title: Title } | { type: "library" } | { type: "store" };
 type Zone = "top" | "row" | "actions" | "cards";
 const TOP_ITEMS = ["games", "media", "search", "settings", "profile"] as const;
 const LOWER_CARDS = 3;
@@ -38,6 +38,8 @@ const LOWER_CARDS = 3;
 export interface HomeCallbacks {
   onSwitchProfile(): void;
   onLaunch(title: Title): Promise<void>;
+  /** Steam Store screen (unrestricted profiles only). */
+  onOpenStore(): void;
 }
 
 export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
@@ -47,7 +49,11 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
   let topIndex = 0;
   let actionIndex = 0;
   let cardIndex = 0;
-  const rowIndex: Record<Tab, number> = { games: 0, media: 0 };
+  // Grown-ups get the Steam Store as the first tile, like the PS5's store
+  // tile; focus starts on the most recent game next to it.
+  const hasStore = (t: Tab) => t === "games" && !profile.restricted;
+  const firstTitle = (t: Tab) => (hasStore(t) ? 1 : 0);
+  const rowIndex: Record<Tab, number> = { games: firstTitle("games"), media: 0 };
   let items: RowItem[] = [];
   let busy = false;
 
@@ -110,6 +116,7 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
 
   function loadItems() {
     items = [
+      ...(hasStore(tab) ? [{ type: "store" } as RowItem] : []),
       ...titlesForTab(profile, tab).map((title): RowItem => ({ type: "title", title })),
       { type: "library" },
     ];
@@ -120,9 +127,9 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
   function buildRow() {
     rowEl.replaceChildren(
       ...items.map((item) => {
-        if (item.type === "library") {
-          const tile = h("div.tile.tile-icon");
-          tile.innerHTML = tab === "games" ? icons.library : icons.apps;
+        if (item.type === "library" || item.type === "store") {
+          const tile = h(`div.tile.tile-icon${item.type === "store" ? ".tile-store" : ""}`);
+          tile.innerHTML = item.type === "store" ? icons.store : tab === "games" ? icons.library : icons.apps;
           return tile;
         }
         return titleTile(item.title, isFavorite(profile, item.title.id));
@@ -148,7 +155,11 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
 
     const item = focusedItem();
     labelEl.textContent =
-      item?.type === "library" ? (tab === "games" ? "Game Library" : "All Apps") : item?.title.name ?? "";
+      item?.type === "store"
+        ? "Steam Store"
+        : item?.type === "library"
+          ? tab === "games" ? "Game Library" : "All Apps"
+          : item?.title.name ?? "";
     labelEl.style.left = `${ANCHOR_X + BIG + LABEL_GAP}px`;
   }
 
@@ -196,6 +207,10 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
       logoSlot.append(h("h2.hub-title", {}, tab === "games" ? "Game Library" : "All Apps"));
       taglineEl.textContent =
         tab === "games" ? "Every game you can play, in one place." : "Every app on this system.";
+      playBtn.textContent = "Open";
+    } else if (item?.type === "store") {
+      logoSlot.append(h("h2.hub-title", {}, "Steam Store"));
+      taglineEl.textContent = "Trending games, top sellers, deals, couch co-op and more.";
       playBtn.textContent = "Open";
     } else if (title) {
       const textTitle = () => logoSlot.replaceChildren(h("h2.hub-title", {}, title.name));
@@ -308,7 +323,7 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
     try {
       await cb.onLaunch(title);
       markPlayed(title.id);
-      rowIndex[tab] = 0;
+      rowIndex[tab] = firstTitle(tab);
       fullRender();
     } finally {
       veil.classList.remove("show");
@@ -331,6 +346,7 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
     const item = focusedItem();
     if (!item) return;
     if (item.type === "library") openLibrary();
+    else if (item.type === "store") cb.onOpenStore();
     else void launch(item.title);
   }
 
