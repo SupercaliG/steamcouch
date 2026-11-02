@@ -1,0 +1,58 @@
+name: Release
+
+# Builds the Linux app and publishes it as a GitHub release. Custom Bazzite
+# images download releases/latest/download/steamcouch-linux-x64.tar.gz and
+# install it system-wide (see deploy/README.md).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build Linux app
+        run: npm run package:linux
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          P="$RUNNER_TEMP/steamcouch"
+          mkdir -p "$P"
+          cp -a release/linux-unpacked "$P/app"
+          install -m 0755 deploy/steamcouch-session "$P/steamcouch-session"
+          install -m 0644 deploy/ogui-steam.session-override "$P/ogui-steam.session-override"
+          echo "${GITHUB_SHA}" > "$P/BUILD"
+          tar -czf "$RUNNER_TEMP/steamcouch-linux-x64.tar.gz" -C "$RUNNER_TEMP" steamcouch
+          ls -la "$RUNNER_TEMP/steamcouch-linux-x64.tar.gz"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          TAG="v${VERSION}-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" "$RUNNER_TEMP/steamcouch-linux-x64.tar.gz" \
+            --title "steamcouch $TAG" \
+            --notes "Built from ${GITHUB_SHA::7}." \
+            --latest

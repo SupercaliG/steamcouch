@@ -1,12 +1,20 @@
 #!/usr/bin/bash
 # steamcouch session client, started by gamescope-session-plus in place of
-# the Steam UI (see the ogui-steam override next to this file).
+# the Steam UI (see ogui-steam.session-override). Installed by the image as
+# /usr/libexec/steamcouch-session; the app itself lives in /usr/lib/steamcouch.
 #
 # Steam runs hidden in the background: it launches games, installs them and
 # provides Steam Input. The dashboard is the only visible window.
 
 APP_DIR="$HOME/.local/share/steamcouch"
+mkdir -p "$APP_DIR"
 LOG="$APP_DIR/session.log"
+# A copy in the home folder wins over the system one (for development).
+if [ -x "$APP_DIR/app/steamcouch" ]; then
+  APP="$APP_DIR/app/steamcouch"
+else
+  APP="/usr/lib/steamcouch/app/steamcouch"
+fi
 EXIT_TO_STEAM=42
 # gamescope-session-plus resets Steam after 5 sessions shorter than 60 s.
 MIN_SESSION_SECONDS=60
@@ -15,8 +23,8 @@ MIN_SESSION_SECONDS=60
 
 # A dashboard left over from an earlier session would hold the single-instance
 # lock and make this one exit at once.
-pkill -f "^$APP_DIR/app/steamcouch" && sleep 1
-echo "steamcouch session start $(date)" >>"$LOG"
+pkill -f "^($APP_DIR|/var$APP_DIR|/usr/lib/steamcouch)/app/steamcouch" && sleep 1
+echo "steamcouch session start $(date), app: $APP" >>"$LOG"
 
 if ! pgrep -x steam >/dev/null; then
   # Same mode flags as Steam Gaming Mode, so the saved sign-in is reused.
@@ -40,7 +48,7 @@ fi
 echo "flags: ${FLAGS[*]}" >>"$LOG"
 
 start=$SECONDS
-"$APP_DIR/app/steamcouch" "${FLAGS[@]}" >>"$LOG" 2>&1
+"$APP" "${FLAGS[@]}" >>"$LOG" 2>&1
 code=$?
 echo "dashboard exited with $code after $((SECONDS - start)) s" >>"$LOG"
 
