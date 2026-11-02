@@ -76,7 +76,8 @@ export interface StoreItem {
   comingSoon: boolean;
   earlyAccess: boolean;
   fullController: boolean;
-  deckVerified: boolean;
+  /** Steam's SteamOS / Steam Deck rating. */
+  steamos: "verified" | "playable" | "unsupported" | "unknown";
 }
 
 export interface StoreSection {

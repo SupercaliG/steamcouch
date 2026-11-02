@@ -74,8 +74,10 @@ interface RawItem {
 }
 
 const FULL_CONTROLLER_CATEGORY = 28;
-const DECK_VERIFIED = 3;
+const STEAMOS_RATING = { 1: "unsupported", 2: "playable", 3: "verified" } as const;
 const TYPE_GAME = 0;
+/** Most-played games to check, to fill Trending with controller games that run on SteamOS. */
+const MOST_PLAYED_CHECKED = 100;
 
 export function createSteamStore(country = storeCountry()) {
   const cache = new Map<string, Cached<unknown>>();
@@ -126,7 +128,8 @@ export function createSteamStore(country = storeCountry()) {
       comingSoon: Boolean(raw.release?.is_coming_soon),
       earlyAccess: Boolean(raw.release?.is_early_access),
       fullController: Boolean(raw.categories?.controller_categoryids?.includes(FULL_CONTROLLER_CATEGORY)),
-      deckVerified: raw.platforms?.steam_deck_compat_category === DECK_VERIFIED,
+      steamos:
+        STEAMOS_RATING[raw.platforms?.steam_deck_compat_category as keyof typeof STEAMOS_RATING] ?? "unknown",
     };
   }
 
@@ -191,10 +194,13 @@ export function createSteamStore(country = storeCountry()) {
   }
 
   async function section(def: StoreSectionDef): Promise<StoreSection> {
-    const ids =
-      def.source === "most-played"
-        ? (await mostPlayed()).slice(0, SECTION_SIZE * 2)
-        : await search(def.filters ?? [], 0, SECTION_SIZE + 5);
+    if (def.source === "most-played") {
+      // The chart has no filters: keep controller games that run on SteamOS.
+      const all = await details((await mostPlayed()).slice(0, MOST_PLAYED_CHECKED));
+      const items = all.filter((it) => it.fullController && (it.steamos === "verified" || it.steamos === "playable"));
+      return { id: def.id, title: def.title, items: items.slice(0, SECTION_SIZE) };
+    }
+    const ids = await search(def.filters ?? [], 0, SECTION_SIZE + 5);
     return { id: def.id, title: def.title, items: (await details(ids)).slice(0, SECTION_SIZE) };
   }
 

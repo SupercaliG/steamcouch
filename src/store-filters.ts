@@ -84,7 +84,9 @@ export const STORE_FILTERS: StoreFilter[] = [
   tag("f2p", "Free to Play", 113),
 
   { id: "controller", label: "Full Controller Support", group: "Features", param: "category3", value: "28" },
-  { id: "deck", label: "Steam Deck Verified", group: "Features", param: "deck_compatibility", value: "3" },
+  // Steam Deck "Verified" (3) or "Playable" (2). Leaves out games Steam marks
+  // "Unsupported" on SteamOS (often anti-cheat) and ones it has not tested.
+  { id: "steamos", label: "Runs on SteamOS", group: "Features", param: "deck_compatibility", value: "2,3" },
 
   { id: "price-free", label: "Free", group: "Price", param: "maxprice", value: "free" },
   { id: "price-10", label: "Under $10", group: "Price", param: "maxprice", value: "10" },
@@ -93,7 +95,9 @@ export const STORE_FILTERS: StoreFilter[] = [
 ];
 
 export const GROUP_ORDER: FilterGroup[] = ["Sort", "Players", "Genre", "Features", "Price"];
-export const DEFAULT_FILTERS = ["sort-top"];
+/** Every store list starts with these: couch games that run on this PC. */
+export const REQUIRED_FILTERS = ["controller", "steamos"];
+export const DEFAULT_FILTERS = ["sort-top", ...REQUIRED_FILTERS];
 
 /** Discover rows: a Steam search (by filter ids) or the most-played chart. */
 export interface StoreSectionDef {
@@ -103,16 +107,18 @@ export interface StoreSectionDef {
   source?: "most-played";
 }
 
+const req = REQUIRED_FILTERS;
 export const DISCOVER_SECTIONS: StoreSectionDef[] = [
   { id: "trending", title: "Trending Now", source: "most-played" },
-  { id: "top", title: "Top Sellers", filters: ["sort-top"] },
-  { id: "new", title: "New & Popular", filters: ["sort-popular-new"] },
-  { id: "deals", title: "Deals", filters: ["sort-top", "price-sale"] },
-  { id: "couch", title: "Couch Co-op", filters: ["sort-top", "split-coop"] },
-  { id: "indie", title: "Indie Favorites", filters: ["sort-top", "indie"] },
-  { id: "family", title: "Family Friendly", filters: ["sort-top", "family"] },
-  { id: "free", title: "Free to Play", filters: ["sort-top", "price-free"] },
-  { id: "soon", title: "Coming Soon", filters: ["sort-soon"] },
+  { id: "top", title: "Top Sellers", filters: ["sort-top", ...req] },
+  { id: "new", title: "New & Popular", filters: ["sort-popular-new", ...req] },
+  { id: "deals", title: "Deals", filters: ["sort-top", "price-sale", ...req] },
+  { id: "couch", title: "Couch Co-op", filters: ["sort-top", "split-coop", ...req] },
+  { id: "indie", title: "Indie Favorites", filters: ["sort-top", "indie", ...req] },
+  { id: "family", title: "Family Friendly", filters: ["sort-top", "family", ...req] },
+  { id: "free", title: "Free to Play", filters: ["sort-top", "price-free", ...req] },
+  // Unreleased games are not rated for SteamOS yet, so only the controller counts.
+  { id: "soon", title: "Coming Soon", filters: ["sort-soon", "controller"] },
 ];
 
 /** Steam search parameters for a set of filter ids. Unknown ids are ignored. */

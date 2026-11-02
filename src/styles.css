@@ -440,6 +440,7 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
   background: rgba(255, 255, 255, 0.12); backdrop-filter: blur(12px);
 }
 .shop-chip.owned, .shop-price.owned { color: #7fd1ff; }
+.shop-chip.warn { color: #ffb4a8; }
 .shop-review { font-size: 21px; }
 .shop-review.good { color: #8fc7ff; }
 .shop-review.mixed { color: #e2c46a; }

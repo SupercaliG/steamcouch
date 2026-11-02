@@ -253,7 +253,7 @@ export function shopScreen(cb: ShopCallbacks): Screen {
     const labels = STORE_FILTERS.filter((f) => filters.includes(f.id)).map((f) => f.label);
     gridHead.replaceChildren(
       h("span.shop-grid-filters", {}, labels.join("  ·  ")),
-      h("span.shop-grid-hint", {}, h("span.lib-hint", {}, "Y"), " Clear filters"),
+      h("span.shop-grid-hint", {}, h("span.lib-hint", {}, "Y"), " Reset filters"),
     );
     setHero(zone === "grid" ? results[gridIndex] : undefined);
   }
@@ -378,7 +378,7 @@ export function shopScreen(cb: ShopCallbacks): Screen {
 
     if (action === "options") {
       filters = [...DEFAULT_FILTERS];
-      toast("Filters cleared");
+      toast("Filters reset");
       paintBrowse();
       void loadResults(true);
       return;
@@ -473,7 +473,9 @@ function metaLine(item: StoreItem, isOwned: boolean): HTMLElement {
     );
   }
   if (item.fullController) chips.push(h("span.shop-chip", {}, "Full Controller Support"));
-  if (item.deckVerified) chips.push(h("span.shop-chip", {}, "Deck Verified"));
+  if (item.steamos === "verified") chips.push(h("span.shop-chip", {}, "SteamOS Verified"));
+  else if (item.steamos === "playable") chips.push(h("span.shop-chip", {}, "SteamOS Playable"));
+  else if (item.steamos === "unsupported") chips.push(h("span.shop-chip.warn", {}, "Not supported on SteamOS"));
   return h("div.shop-meta", {}, ...chips);
 }
 
