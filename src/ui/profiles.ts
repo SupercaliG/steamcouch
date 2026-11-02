@@ -2,7 +2,7 @@ import { clamp, formatClock, h } from "../dom";
 import type { Action } from "../input";
 import type { Profile } from "../types";
 import { pinPad } from "./pin";
-import { avatar, overlayHost, toast, type Screen } from "./screen";
+import { avatar, overlayHost, type Screen } from "./screen";
 
 /** "Who's playing?" screen shown at power-on and when switching profiles. */
 export function profileScreen(
@@ -10,13 +10,11 @@ export function profileScreen(
   initialId: string | undefined,
   onPick: (profile: Profile) => void,
 ): Screen {
-  // Focusable items: each profile, then the "Add User" button.
   let index = Math.max(0, profiles.findIndex((p) => p.id === initialId));
 
   const cards = profiles.map((p) =>
     h("div.profile-card", {}, avatar(p, "profile-avatar"), h("div.profile-name", {}, p.name)),
   );
-  const add = h("div.profile-add", {}, h("div.profile-add-btn", {}, "+"), h("div.profile-add-label", {}, "Add User"));
   const clock = h("div.profile-clock", {}, formatClock(new Date()));
   const timer = setInterval(() => (clock.textContent = formatClock(new Date())), 10_000);
   const dust = particles();
@@ -29,13 +27,11 @@ export function profileScreen(
     clock,
     h("h1.profiles-title", {}, "Who's playing?"),
     h("div.profiles-row", {}, ...cards),
-    add,
   );
   const overlays = overlayHost(el);
 
   const render = () => {
     cards.forEach((c, i) => c.classList.toggle("focused", i === index));
-    add.classList.toggle("focused", index === profiles.length);
   };
   render();
 
@@ -59,16 +55,9 @@ export function profileScreen(
     el,
     handle(action: Action) {
       if (overlays.active) return overlays.active.handle(action);
-      const onAdd = index === profiles.length;
-      if (action === "left" && !onAdd) index = clamp(index - 1, 0, profiles.length - 1);
-      else if (action === "right" && !onAdd) index = clamp(index + 1, 0, profiles.length - 1);
-      else if (action === "down") index = profiles.length;
-      else if (action === "up" && onAdd) index = 0;
-      else if (action === "accept") {
-        if (onAdd) toast("Adding users comes in a later version");
-        else pick(profiles[index]!);
-        return;
-      }
+      if (action === "left") index = clamp(index - 1, 0, profiles.length - 1);
+      else if (action === "right") index = clamp(index + 1, 0, profiles.length - 1);
+      else if (action === "accept") return pick(profiles[index]!);
       render();
     },
     destroy() {
