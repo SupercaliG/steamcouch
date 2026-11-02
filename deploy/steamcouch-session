@@ -1,0 +1,65 @@
+#!/usr/bin/bash
+# steamcouch session client, started by gamescope-session-plus in place of
+# the Steam UI (see the ogui-steam override next to this file).
+#
+# Steam runs hidden in the background: it launches games, installs them and
+# provides Steam Input. The dashboard is the only visible window.
+
+APP_DIR="$HOME/.local/share/steamcouch"
+LOG="$APP_DIR/session.log"
+EXIT_TO_STEAM=42
+# gamescope-session-plus resets Steam after 5 sessions shorter than 60 s.
+MIN_SESSION_SECONDS=60
+
+: >"$LOG"
+
+# A dashboard left over from an earlier session would hold the single-instance
+# lock and make this one exit at once.
+pkill -f "^$APP_DIR/app/steamcouch" && sleep 1
+echo "steamcouch session start $(date)" >>"$LOG"
+
+if ! pgrep -x steam >/dev/null; then
+  # Same mode flags as Steam Gaming Mode, so the saved sign-in is reused.
+  steam -silent -steamos3 -steampal -steamdeck >>"$LOG" 2>&1 &
+fi
+
+# Draw on the NVIDIA card. Without this Chromium can pick the Intel iGPU
+# render node inside gamescope and its GPU process crashes.
+FLAGS=()
+for node in /dev/dri/by-path/*-render; do
+  dev=$(basename "$(readlink -f "$node")")
+  if [ "$(basename "$(readlink -f "/sys/class/drm/$dev/device/driver")")" = "nvidia" ]; then
+    FLAGS+=("--render-node-override=/dev/dri/$dev")
+  fi
+done
+# Extra Chromium/Electron switches, one per line (for GPU troubleshooting).
+FLAGS_FILE="$HOME/.config/steamcouch/electron-flags"
+if [ -f "$FLAGS_FILE" ]; then
+  mapfile -t -O "${#FLAGS[@]}" FLAGS < <(grep -v '^\s*\(#\|$\)' "$FLAGS_FILE")
+fi
+echo "flags: ${FLAGS[*]}" >>"$LOG"
+
+start=$SECONDS
+"$APP_DIR/app/steamcouch" "${FLAGS[@]}" >>"$LOG" 2>&1
+code=$?
+echo "dashboard exited with $code after $((SECONDS - start)) s" >>"$LOG"
+
+# Give the controller back to games, even if the dashboard crashed while the
+# Control Center had every press routed to it (InputPlumber intercept mode).
+for dev in $(busctl --system --list tree org.shadowblip.InputPlumber 2>/dev/null | grep -E '/CompositeDevice[0-9]+$'); do
+  busctl --system set-property org.shadowblip.InputPlumber "$dev"     org.shadowblip.Input.CompositeDevice InterceptMode u 0 2>/dev/null
+done
+
+if [ "$code" = "$EXIT_TO_STEAM" ]; then
+  # Next session start runs Steam Gaming Mode once, then the dashboard again.
+  touch "$APP_DIR/use-steam-once"
+  steam -shutdown >>"$LOG" 2>&1
+  for _ in $(seq 1 20); do pgrep -x steam >/dev/null || break; sleep 0.5; done
+elif [ $((SECONDS - start)) -lt "$MIN_SESSION_SECONDS" ]; then
+  # The dashboard stopped right after start: give the TV a working Steam next
+  # time, and stay up long enough that the session is not counted as broken.
+  echo "dashboard stopped early; next session runs Steam" >>"$LOG"
+  touch "$APP_DIR/use-steam-once"
+  sleep $((MIN_SESSION_SECONDS - (SECONDS - start)))
+fi
+exit 0

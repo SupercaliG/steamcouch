@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.local
+gs-ogui.png
+.gstack/
+.shots-*.png
+.steam-snapshot/
+.cache/
+dist-electron/
+release/

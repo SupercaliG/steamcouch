@@ -1,0 +1,11 @@
+# steamcouch: run the couch dashboard instead of the Steam UI.
+# Install as ~/.config/gamescope-session-plus/sessions.d/ogui-steam
+# (sourced by gamescope-session-plus after the system session file).
+# Delete this file to go back to Steam Gaming Mode for good.
+
+if [ -f "$HOME/.local/share/steamcouch/use-steam-once" ]; then
+  # "Steam Gaming Mode" was picked in the dashboard: run Steam this one time.
+  rm -f "$HOME/.local/share/steamcouch/use-steam-once"
+else
+  CLIENTCMD="$HOME/.local/share/steamcouch/steamcouch-session"
+fi
