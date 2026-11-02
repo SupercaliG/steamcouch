@@ -7,7 +7,7 @@ Sony logos, fonts, sounds, or other assets.
 
 ## Screens
 
-1. **Who's playing?** Profile picker at boot: Kids, Grown-ups.
+1. **Who's playing?** Profile picker at boot: Kids, Mommy, Daddy.
 2. **Games tab.** Top bar (Games | Media tabs, search, settings, avatar, clock).
    One row of square tiles: recent games first, favorites pinned with a heart,
    Game Library tile last. The focused tile grows and its name shows beside it.
@@ -19,7 +19,7 @@ Sony logos, fonts, sounds, or other assets.
 4. **Game Library.** Grid of all games, filters (installed, favorites, recomps).
 
 Profiles decide which games and apps show. Kids see only titles on their allow
-list. Grown-ups see everything. Profile data lives in a local JSON file.
+list. Mommy and Daddy see everything. Profile data lives in a local JSON file.
 
 ## Architecture
 

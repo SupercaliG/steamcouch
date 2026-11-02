@@ -1,4 +1,4 @@
-import { profiles as defaultProfiles, titles as mockTitles } from "./data/mock";
+import { profiles as defaultProfiles, legacyProfiles, titles as mockTitles } from "./data/mock";
 import type { Profile, StoreItem, StoreSection, Tab, Title } from "./types";
 
 // App data plus per-profile settings (favorites, allow list, passcode).
@@ -48,6 +48,20 @@ export async function loadLibrary(): Promise<void> {
       }
     })(),
   ]);
+  migrateProfiles();
+}
+
+/** Copy settings saved under an old profile id (e.g. "grownups") to the profiles that replaced it. */
+function migrateProfiles() {
+  let changed = false;
+  for (const [oldId, newIds] of Object.entries(legacyProfiles)) {
+    const saved = settings.profiles[oldId];
+    if (!saved) continue;
+    for (const id of newIds) settings.profiles[id] ??= structuredClone(saved);
+    delete settings.profiles[oldId];
+    changed = true;
+  }
+  if (changed) persist();
 }
 
 function persist() {

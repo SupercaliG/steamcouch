@@ -59,11 +59,24 @@ export const profiles: Profile[] = [
     favorites: [],
   },
   {
-    id: "grownups",
-    name: "Grown-ups",
+    id: "mommy",
+    name: "Mommy",
+    color: "#e0559b",
+    restricted: false,
+    allow: [],
+    favorites: [],
+  },
+  {
+    id: "daddy",
+    name: "Daddy",
     color: "#8b5cf6",
     restricted: false,
     allow: [],
     favorites: [],
   },
 ];
+
+/** Profile ids that were merged or renamed; their saved settings move to the new ids. */
+export const legacyProfiles: Record<string, string[]> = {
+  grownups: ["mommy", "daddy"],
+};
