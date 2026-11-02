@@ -23,6 +23,8 @@ interface SavedSettings {
 
 const LOCAL_KEY = "steamcouch.settings";
 let settings: SavedSettings = { profiles: {}, lastPlayed: {} };
+/** Profile id -> picture URL, for profiles with a picture sent from a phone. */
+let avatars: Record<string, string> = {};
 let settingsApi = false;
 
 export async function loadLibrary(): Promise<void> {
@@ -47,6 +49,7 @@ export async function loadLibrary(): Promise<void> {
         settings = { profiles: {}, lastPlayed: {}, ...JSON.parse(localStorage.getItem(LOCAL_KEY) ?? "{}") };
       }
     })(),
+    refreshAvatars(),
   ]);
   migrateProfiles();
 }
@@ -79,7 +82,46 @@ function save(profile: Profile): Profile {
 }
 
 export function allProfiles(): Profile[] {
-  return defaultProfiles.map((p) => ({ ...p, ...settings.profiles[p.id] }));
+  return defaultProfiles.map((p) => ({ ...p, ...settings.profiles[p.id], avatar: avatars[p.id] ?? p.avatar }));
+}
+
+/** Reload which profiles have a picture. True when something changed. */
+export async function refreshAvatars(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/avatars");
+    if (!res.ok) return false;
+    const next = (await res.json()) as Record<string, string>;
+    const changed = JSON.stringify(next) !== JSON.stringify(avatars);
+    avatars = next;
+    return changed;
+  } catch {
+    return false;
+  }
+}
+
+/** Let a phone send a picture for a profile; returns the link for the QR code. */
+export async function startAvatarUpload(profileId: string): Promise<string> {
+  const res = await fetch("/api/avatars/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profileId }),
+  });
+  const data = (await res.json()) as { url?: string; error?: string };
+  if (!res.ok || !data.url) throw new Error(data.error ?? `HTTP ${res.status}`);
+  return data.url;
+}
+
+export async function stopAvatarUpload(): Promise<void> {
+  await fetch("/api/avatars/stop", { method: "POST" }).catch(() => undefined);
+}
+
+export async function removeAvatar(profileId: string): Promise<void> {
+  await fetch("/api/avatars/remove", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profileId }),
+  });
+  await refreshAvatars();
 }
 
 export function getProfile(id: string): Profile {

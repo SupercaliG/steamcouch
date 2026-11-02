@@ -27,7 +27,7 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
 .icon { width: 100%; height: 100%; }
 
 /* ---------- Avatars ---------- */
-.avatar, .profile-avatar, .top-avatar-img, .lower-avatar-img, .settings-avatar {
+.avatar, .profile-avatar, .top-avatar-img, .lower-avatar-img, .settings-avatar, .picture-avatar {
   border-radius: 50%; overflow: hidden; display: grid; place-items: center; flex: none;
 }
 .avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -517,3 +517,24 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
 
 .shop-veil-text { position: relative; display: flex; flex-direction: column; align-items: center; gap: 22px; }
 .shop-veil-hint { font-size: 23px; font-weight: 300; color: var(--ink-dim); }
+
+/* ---------- Settings: profile picture from a phone ---------- */
+.picture-layout { display: flex; gap: 110px; align-items: flex-start; padding-top: 30px; }
+.picture-preview { display: flex; flex-direction: column; align-items: center; gap: 26px; width: 340px; }
+.picture-avatar { width: 300px; height: 300px; font-size: 130px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
+.picture-name { font-size: 32px; font-weight: 300; }
+.picture-steps { display: flex; flex-direction: column; gap: 22px; }
+.picture-qr {
+  width: 360px; height: 360px; border-radius: 18px; background: #fff; padding: 14px;
+  display: grid; place-items: center; position: relative;
+}
+.picture-qr svg { width: 100%; height: 100%; display: block; }
+.picture-qr .spinner { border-color: rgba(10, 13, 22, 0.15); border-top-color: #0a0d16; }
+.picture-error { color: #0a0d16; font-size: 24px; text-align: center; }
+.picture-howto { margin: 30px 0 0; padding-left: 30px; font-size: 25px; font-weight: 300; line-height: 1.7; }
+.picture-note { font-size: 20px; font-weight: 300; color: var(--ink-dim); }
+.picture-status { font-size: 20px; color: #ffb4a8; min-height: 24px; }
+.picture-hints {
+  position: absolute; left: 0; bottom: 70px; display: flex; align-items: center; gap: 8px;
+  font-size: 21px; font-weight: 300; color: var(--ink-dim); white-space: pre;
+}

@@ -3,10 +3,11 @@
 //   - on the couch PC through Electron's app:// protocol (electron/main.ts)
 // Both call handleApi(), so the UI code is the same in both places.
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, sep } from "node:path";
 import { readLibrary, type Library } from "./steam/library.ts";
 import { createSteamStore } from "./steam/store.ts";
+import { createUploads } from "./upload.ts";
 import { fillMissingArt } from "./steam/steamgriddb.ts";
 import { taglineCache } from "./steam/taglines.ts";
 
@@ -84,6 +85,9 @@ export function createApi(config: ApiConfig) {
   let lib: Library | undefined;
   const system = config.system ?? devSystem();
   const store = createSteamStore();
+  const avatarDir = join(config.dataDir, "avatars");
+  const uploads = createUploads(avatarDir);
+  const profileIdOk = (id: unknown): id is string => typeof id === "string" && /^[a-z0-9-]+$/.test(id);
 
   const json = (data: unknown, status = 200): ApiResponse => ({
     status,
@@ -216,6 +220,47 @@ export function createApi(config: ApiConfig) {
       }
       config.power?.(action);
       return json({ ok: true, simulated: !config.power });
+    }
+
+    // ---------- profile pictures (sent from a phone, see upload.ts) ----------
+    if (method === "GET" && path === "/api/avatars") {
+      const out: Record<string, string> = {};
+      if (existsSync(avatarDir)) {
+        for (const file of readdirSync(avatarDir)) {
+          const m = /^([a-z0-9-]+)\.jpg$/.exec(file);
+          if (m) out[m[1]!] = `/api/avatar/${m[1]}?v=${Math.floor(statSync(join(avatarDir, file)).mtimeMs)}`;
+        }
+      }
+      return json(out);
+    }
+
+    if (method === "GET" && path.startsWith("/api/avatar/")) {
+      const id = path.slice("/api/avatar/".length);
+      const file = join(avatarDir, `${id}.jpg`);
+      if (!profileIdOk(id) || !existsSync(file)) return { status: 404, type: "text/plain", body: "" };
+      return { status: 200, type: "image/jpeg", body: readFileSync(file) };
+    }
+
+    if (method === "POST" && path === "/api/avatars/upload" && body) {
+      const { profileId } = JSON.parse(body) as { profileId?: unknown };
+      if (!profileIdOk(profileId)) return json({ error: "bad profileId" }, 400);
+      try {
+        return json(await uploads.start(profileId));
+      } catch (err) {
+        return json({ error: String(err instanceof Error ? err.message : err) }, 503);
+      }
+    }
+
+    if (method === "POST" && path === "/api/avatars/stop") {
+      uploads.stop();
+      return json({ ok: true });
+    }
+
+    if (method === "POST" && path === "/api/avatars/remove" && body) {
+      const { profileId } = JSON.parse(body) as { profileId?: unknown };
+      if (!profileIdOk(profileId)) return json({ error: "bad profileId" }, 400);
+      rmSync(join(avatarDir, `${profileId}.jpg`), { force: true });
+      return json({ ok: true });
     }
 
     if (method === "GET" && path === "/api/store/discover") {

@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import { clamp, h, img } from "../dom";
 import type { Action } from "../input";
 import {
@@ -5,9 +6,13 @@ import {
   allTitles,
   controllerOnly,
   getProfile,
+  refreshAvatars,
+  removeAvatar,
   setAllowed,
   setControllerOnly,
   setPin,
+  startAvatarUpload,
+  stopAvatarUpload,
 } from "../store";
 import type { Profile, Title, TitleKind } from "../types";
 import { pinPad } from "./pin";
@@ -159,6 +164,98 @@ export function settingsOverlay(host: OverlayHost, onChanged: () => void): Overl
     };
   }
 
+  /**
+   * QR code for a phone: scan it, pick a photo, and it becomes this profile's
+   * picture. The phone link only works while this view is open.
+   */
+  function pictureView(profileId: string): View {
+    const POLL_MS = 1500;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    let open = false;
+    const preview = h("div.picture-preview");
+    const qrBox = h("div.picture-qr");
+    const status = h("div.picture-status");
+
+    const paintPreview = () => {
+      const p = getProfile(profileId);
+      preview.replaceChildren(avatar(p, "picture-avatar"), h("div.picture-name", {}, p.name));
+    };
+
+    const leave = () => {
+      open = false;
+      clearInterval(poll);
+      void stopAvatarUpload();
+      onChanged();
+      pop();
+    };
+
+    const view: View = {
+      render() {
+        heading.textContent = "Profile picture";
+        paintPreview();
+        if (!open) qrBox.replaceChildren(h("div.spinner"));
+        body.replaceChildren(
+          h(
+            "div.picture-layout",
+            {},
+            preview,
+            h(
+              "div.picture-steps",
+              {},
+              qrBox,
+              h(
+                "ol.picture-howto",
+                {},
+                h("li", {}, "Point your phone camera at the code."),
+                h("li", {}, "Tap the link, then choose a photo."),
+                h("li", {}, "Tap Send to TV."),
+              ),
+              h("div.picture-note", {}, "Your phone must be on the same Wi-Fi as this TV."),
+              status,
+            ),
+          ),
+          h(
+            "div.picture-hints",
+            {},
+            h("span.lib-hint", {}, "Y"),
+            " Remove picture    ",
+            h("span.lib-hint", {}, "B"),
+            " Done",
+          ),
+        );
+        if (open) return;
+        open = true;
+        status.textContent = "";
+        void startAvatarUpload(profileId)
+          .then(async (url) => {
+            if (!open) return;
+            // Generated locally by the qrcode library: plain SVG markup, no user content.
+            qrBox.innerHTML = await QRCode.toString(url, { type: "svg", margin: 2, errorCorrectionLevel: "M" });
+          })
+          .catch((err: unknown) => {
+            qrBox.replaceChildren(h("div.picture-error", {}, "Can't share right now"));
+            status.textContent = err instanceof Error ? err.message : String(err);
+          });
+        poll = setInterval(async () => {
+          if (await refreshAvatars()) {
+            paintPreview();
+            toast(`New picture for ${getProfile(profileId).name}`);
+          }
+        }, POLL_MS);
+      },
+      handle(a) {
+        if (a === "back" || a === "accept") return leave();
+        if (a === "options") {
+          void removeAvatar(profileId).then(() => {
+            paintPreview();
+            toast("Picture removed");
+          });
+        }
+      },
+    };
+    return view;
+  }
+
   function passcodeView(profileId: string): View {
     return menuView(`${getProfile(profileId).name} passcode`, () => {
       const p = getProfile(profileId);
@@ -217,6 +314,23 @@ export function settingsOverlay(host: OverlayHost, onChanged: () => void): Overl
             setControllerOnly(!controllerOnly());
             views[views.length - 1]?.render();
           },
+        },
+        {
+          label: "Profile pictures",
+          detail: "Send from your phone",
+          run: () =>
+            push(
+              menuView("Profile pictures", () =>
+                allProfiles().map(
+                  (p): MenuItem => ({
+                    label: p.name,
+                    detail: p.avatar ? "Change picture" : "Add a picture",
+                    icon: avatar(p, "settings-avatar"),
+                    run: () => push(pictureView(p.id)),
+                  }),
+                ),
+              ),
+            ),
         },
         ...profiles
           .filter((p) => p.restricted)
