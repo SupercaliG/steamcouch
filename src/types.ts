@@ -45,7 +45,7 @@ export interface Profile {
   avatar?: string;
   /**
    * Restricted profiles (Kids) only see titles on their allow list and cannot
-   * open settings. Unrestricted profiles (Mommy, Daddy) see everything.
+   * open settings. Unrestricted profiles (Mommy & Daddy) see everything.
    */
   restricted: boolean;
   /** Title ids a restricted profile may see. Ignored when not restricted. */

@@ -59,16 +59,10 @@ export const profiles: Profile[] = [
     favorites: [],
   },
   {
-    id: "mommy",
-    name: "Mommy",
-    color: "#e0559b",
-    restricted: false,
-    allow: [],
-    favorites: [],
-  },
-  {
-    id: "daddy",
-    name: "Daddy",
+    // One shared profile for both parents (the id stays "grownups" so saved
+    // settings keep working).
+    id: "grownups",
+    name: "Mommy & Daddy",
     color: "#8b5cf6",
     restricted: false,
     allow: [],
@@ -76,7 +70,11 @@ export const profiles: Profile[] = [
   },
 ];
 
-/** Profile ids that were merged or renamed; their saved settings move to the new ids. */
+/**
+ * Profile ids that were merged or renamed; their saved settings move to the
+ * new ids. A short-lived build had separate Mommy and Daddy profiles.
+ */
 export const legacyProfiles: Record<string, string[]> = {
-  grownups: ["mommy", "daddy"],
+  mommy: ["grownups"],
+  daddy: ["grownups"],
 };
