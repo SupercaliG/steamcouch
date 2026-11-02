@@ -1,5 +1,6 @@
 import { h, img } from "../dom";
 import type { Action } from "../input";
+import { sfx } from "../sound";
 import type { Profile } from "../types";
 
 export interface Screen {
@@ -15,9 +16,10 @@ export interface Overlay {
 }
 
 /** Short message at the bottom of the screen, like a console notification. */
-export function toast(message: string): void {
+export function toast(message: string, opts: { silent?: boolean } = {}): void {
   const stage = document.getElementById("canvas");
   if (!stage) return;
+  if (!opts.silent) sfx.notify();
   const el = document.createElement("div");
   el.className = "toast";
   el.textContent = message;

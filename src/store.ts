@@ -19,6 +19,8 @@ interface SavedSettings {
   lastPlayed: Record<string, number>;
   /** Hide games that cannot be played with a controller. On unless turned off in Settings. */
   controllerOnly?: boolean;
+  /** Menu sounds. On unless turned off in Settings. */
+  menuSounds?: boolean;
 }
 
 const LOCAL_KEY = "steamcouch.settings";
@@ -149,6 +151,15 @@ export function controllerOnly(): boolean {
 
 export function setControllerOnly(on: boolean): void {
   settings.controllerOnly = on;
+  persist();
+}
+
+export function menuSounds(): boolean {
+  return settings.menuSounds !== false;
+}
+
+export function setMenuSounds(on: boolean): void {
+  settings.menuSounds = on;
   persist();
 }
 

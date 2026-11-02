@@ -1,6 +1,7 @@
 import { clamp, formatClock, h } from "../dom";
 import type { Action } from "../input";
 import type { Profile } from "../types";
+import { sfx } from "../sound";
 import { pinPad } from "./pin";
 import { avatar, overlayHost, type Screen } from "./screen";
 
@@ -45,7 +46,10 @@ export function profileScreen(
         if (pin === profile.pin) {
           overlays.close();
           onPick(profile);
-        } else pad.reset("Wrong passcode. Try again.");
+        } else {
+          sfx.error();
+          pad.reset("Wrong passcode. Try again.");
+        }
       },
     });
     overlays.open(pad);

@@ -8,3 +8,4 @@ gs-ogui.png
 .cache/
 dist-electron/
 release/
+.playwright-mcp/

@@ -10,9 +10,11 @@ import {
   getProfile,
   launchTitle as startTitle,
   loadLibrary,
+  menuSounds,
   openStorePage,
   power,
 } from "./store";
+import { sfx } from "./sound";
 import type { Profile, Title } from "./types";
 import { controlCenter } from "./ui/control-center";
 import { homeScreen } from "./ui/home";
@@ -49,7 +51,12 @@ function show(next: Screen) {
 }
 
 function showProfiles() {
-  show(profileScreen(allProfiles(), lastProfileId, showHome));
+  show(
+    profileScreen(allProfiles(), lastProfileId, (profile) => {
+      sfx.login();
+      showHome(profile);
+    }),
+  );
 }
 
 function showHome(profile: Profile) {
@@ -86,6 +93,7 @@ let inSteamStore = false;
 
 async function leaveSteamStore() {
   inSteamStore = false;
+  sfx.close();
   await closeStorePage();
   // Pressing Home makes InputPlumber hold every press for us; give them back.
   await inputMode("normal");
@@ -120,11 +128,13 @@ function watchGame() {
  * back to the dashboard when it closes.
  */
 async function launchTitle(title: Title): Promise<void> {
+  sfx.launch();
   try {
     await startTitle(title);
   } catch (err) {
     console.error(err);
-    toast(`Could not start ${title.name}`);
+    sfx.error();
+    toast(`Could not start ${title.name}`, { silent: true });
     return;
   }
   gameTitle = title;
@@ -151,6 +161,7 @@ let opening = false;
 async function openControlCenter() {
   if (gameMenu || opening) return;
   opening = true;
+  sfx.open();
   const running = inGame && (await gameRunning());
   if (inGame && !running) inGame = false;
   if (running) await gameAction("home"); // freeze game, dashboard in front
@@ -188,6 +199,7 @@ function closeGameMenu() {
   if (!gameMenu) return;
   const menu = gameMenu;
   gameMenu = null;
+  sfx.close();
   menu.destroy?.();
   menu.el.classList.remove("show");
   setTimeout(() => menu.el.remove(), 250);
@@ -210,14 +222,62 @@ async function quit() {
 // instead of the game) and, while the Control Center is open, every press.
 const bridge = (window as unknown as { steamcouch?: { onPad(cb: (a: string) => void): void } }).steamcouch;
 bridge?.onPad((action) => {
-  if (gameMenu) return gameMenu.handle(action as Action);
+  if (gameMenu) return withSound(action as Action, () => gameMenu!.handle(action as Action));
   if (action === "home") void (inSteamStore ? leaveSteamStore() : openControlCenter());
 });
 
 startInput((action) => {
-  if (gameMenu) return gameMenu.handle(action);
+  if (gameMenu) return withSound(action, () => gameMenu!.handle(action));
   if (action === "home") return void (inSteamStore ? leaveSteamStore() : openControlCenter());
   if (inGame || inSteamStore) return; // buttons belong to the game, or to Steam
-  current?.handle(action);
+  withSound(action, () => current?.handle(action));
 });
-void loadLibrary().then(showProfiles);
+
+// ---------------------------------------------------------------- sounds
+//
+// Screens do not play the everyday sounds themselves. Instead every press is
+// handled here, and the screen change tells which sound fits: if the press
+// changed something on screen, focus moved (or a view opened or closed). If
+// nothing changed, the press hit an edge. Screens and actions that make their
+// own sound (log in, start a game, a message) win over the everyday sound.
+
+const changes = new MutationObserver(() => undefined);
+
+function withSound(action: Action, run: () => void) {
+  const mark = sfx.mark();
+  changes.observe(canvas, { subtree: true, childList: true, attributes: true, characterData: true });
+  try {
+    run();
+  } finally {
+    const changed = changes.takeRecords().length > 0;
+    changes.disconnect();
+    if (!sfx.playedSince(mark)) everydaySound(action, changed);
+  }
+}
+
+function everydaySound(action: Action, changed: boolean) {
+  switch (action) {
+    case "up":
+    case "down":
+    case "left":
+    case "right":
+      return changed ? sfx.move() : sfx.edge();
+    case "tabPrev":
+    case "tabNext":
+      return changed ? sfx.tab() : sfx.edge();
+    case "accept":
+      return sfx.select();
+    case "back":
+      return changed ? sfx.back() : undefined;
+    case "options":
+      return changed ? sfx.select() : undefined;
+    case "home":
+      return undefined;
+  }
+}
+
+void loadLibrary().then(() => {
+  sfx.setEnabled(menuSounds());
+  sfx.startup();
+  showProfiles();
+});

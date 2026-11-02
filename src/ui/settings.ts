@@ -6,14 +6,17 @@ import {
   allTitles,
   controllerOnly,
   getProfile,
+  menuSounds,
   refreshAvatars,
   removeAvatar,
   setAllowed,
   setControllerOnly,
+  setMenuSounds,
   setPin,
   startAvatarUpload,
   stopAvatarUpload,
 } from "../store";
+import { sfx } from "../sound";
 import type { Profile, Title, TitleKind } from "../types";
 import { pinPad } from "./pin";
 import { avatar, toast, type Overlay, type OverlayHost } from "./screen";
@@ -290,6 +293,7 @@ export function settingsOverlay(host: OverlayHost, onChanged: () => void): Overl
         }
         if (pin !== first) {
           first = "";
+          sfx.error();
           pad.reset("They did not match. Pick 4 numbers.");
           return;
         }
@@ -312,6 +316,15 @@ export function settingsOverlay(host: OverlayHost, onChanged: () => void): Overl
           detail: controllerOnly() ? `On · ${hidden} hidden` : "Off",
           run: () => {
             setControllerOnly(!controllerOnly());
+            views[views.length - 1]?.render();
+          },
+        },
+        {
+          label: "Menu sounds",
+          detail: menuSounds() ? "On" : "Off",
+          run: () => {
+            setMenuSounds(!menuSounds());
+            sfx.setEnabled(menuSounds());
             views[views.length - 1]?.render();
           },
         },
