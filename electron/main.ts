@@ -109,6 +109,7 @@ const handleApi = createApi({
   system: { status: systemStatus, volume: changeVolume, mute: toggleMute },
   game: {
     running: () => focus.running(),
+    ready: () => focus.ready(),
     home: () => focus.home(), // freezes the game; the page asks for menu input
     resume: async () => {
       await normalInput(); // waits for the buttons to be let go

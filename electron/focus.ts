@@ -269,6 +269,9 @@ export function createFocusManager(log: (msg: string) => void = () => undefined)
 
     running: () => running,
 
+    /** True once the running game has shown a window (its own, or its launcher's). */
+    ready: () => Boolean(running && lastWindow > 0),
+
     /**
      * Home button: freeze the game (like the "Pause Games" Deck plugin) and
      * put the dashboard in front. Online games may disconnect while frozen.

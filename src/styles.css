@@ -571,3 +571,18 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
 .shop-search-wrap { left: 946px; }
 .shop-search-grid { grid-template-columns: repeat(4, 176px); }
 .shop-search-grid .shop-item .shop-card { width: 176px; }
+
+/* Loader on a tile while its game starts */
+.tile-loading {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: rgba(5, 7, 14, 0.62); backdrop-filter: blur(2px);
+  font-size: 19px; font-weight: 400; letter-spacing: 0.3px;
+  animation: tile-loading-in 0.3s var(--ease);
+}
+.tile.big .tile-loading { font-size: 23px; gap: 18px; }
+.tile.big .tile-loading .spinner { width: 54px; height: 54px; border-width: 5px; }
+@keyframes tile-loading-in { from { opacity: 0; } }
+.hub-spinner { width: 26px; height: 26px; border-width: 3px; margin-right: 14px; }
+.hub-play:has(.hub-spinner) { display: flex; align-items: center; justify-content: center; }
+.hub-play.focused .hub-spinner { border-color: rgba(10, 13, 22, 0.2); border-top-color: #0a0d16; }

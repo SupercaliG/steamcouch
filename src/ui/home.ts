@@ -56,6 +56,8 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
   const rowIndex: Record<Tab, number> = { games: firstTitle("games"), media: 0 };
   let items: RowItem[] = [];
   let busy = false;
+  /** Title being started: its tile shows a loader until the game window is up. */
+  let startingId: string | null = null;
 
   // ---------- static DOM ----------
   const heroA = h("div.hero-layer");
@@ -132,7 +134,7 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
           tile.innerHTML = item.type === "store" ? icons.store : tab === "games" ? icons.library : icons.apps;
           return tile;
         }
-        return titleTile(item.title, isFavorite(profile, item.title.id));
+        return titleTile(item.title, isFavorite(profile, item.title.id), item.title.id === startingId);
       }),
     );
   }
@@ -217,7 +219,11 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
       if (title.art.logo) logoSlot.append(img(title.art.logo, "hub-logo-img", textTitle));
       else textTitle();
       taglineEl.textContent = title.tagline;
-      playBtn.textContent = title.kind === "app" ? "Open" : title.installed ? "Play" : "Install";
+      if (title.id === startingId) {
+        playBtn.replaceChildren(h("div.spinner.hub-spinner"), "Starting");
+      } else {
+        playBtn.textContent = title.kind === "app" ? "Open" : title.installed ? "Play" : "Install";
+      }
     }
     moreBtn.style.visibility = title ? "visible" : "hidden";
 
@@ -312,23 +318,18 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
   async function launch(title: Title) {
     if (busy) return;
     busy = true;
-    const veil = h(
-      "div.launch-veil",
-      {},
-      title.art.hero ? img(title.art.hero, "launch-art") : null,
-      h("div.launch-text", {}, h("div.spinner"), `Starting ${title.name}`),
-    );
-    el.append(veil);
-    requestAnimationFrame(() => veil.classList.add("show"));
+    // Most recent first: the game moves to the front of the row, focused,
+    // with a loader on its tile while it starts.
+    markPlayed(title.id);
+    rowIndex[tab] = firstTitle(tab);
+    startingId = title.id;
+    fullRender();
     try {
       await cb.onLaunch(title);
-      markPlayed(title.id);
-      rowIndex[tab] = firstTitle(tab);
-      fullRender();
     } finally {
-      veil.classList.remove("show");
-      setTimeout(() => veil.remove(), 500);
+      startingId = null;
       busy = false;
+      fullRender();
     }
   }
 
@@ -596,7 +597,7 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
 
 // ---------- small builders ----------
 
-function titleTile(title: Title, favorite: boolean): HTMLElement {
+function titleTile(title: Title, favorite: boolean, starting = false): HTMLElement {
   const tile = h("div.tile");
   if (title.art.tile) {
     tile.append(img(title.art.tile, "tile-img", () => paintGeneratedTile(tile, title)));
@@ -614,6 +615,7 @@ function titleTile(title: Title, favorite: boolean): HTMLElement {
     badge.innerHTML = icons.download; // constant SVG markup from icons.ts
     tile.append(badge);
   }
+  if (starting) tile.append(h("div.tile-loading", {}, h("div.spinner"), h("span", {}, "Starting")));
   return tile;
 }
 

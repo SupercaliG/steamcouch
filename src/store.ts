@@ -244,11 +244,17 @@ export async function gameRunning(): Promise<boolean> {
 
 /** Steam game id of the game the dashboard follows, or null. */
 export async function runningGameId(): Promise<string | null> {
+  return (await gameState()).running;
+}
+
+/** The game the dashboard follows, and whether its window is up yet. */
+export async function gameState(): Promise<{ running: string | null; ready: boolean }> {
   try {
     const res = await fetch("/api/game");
-    return ((await res.json()) as { running: string | null }).running;
+    const data = (await res.json()) as { running?: string | null; ready?: boolean };
+    return { running: data.running ?? null, ready: Boolean(data.ready) };
   } catch {
-    return null;
+    return { running: null, ready: false };
   }
 }
 

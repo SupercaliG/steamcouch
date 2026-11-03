@@ -8,6 +8,7 @@ import {
   closeStorePage,
   gameAction,
   gameRunning,
+  gameState,
   getProfile,
   launchTitle as startTitle,
   loadLibrary,
@@ -144,13 +145,32 @@ function unknownGame(gameId: string): Title {
   };
 }
 
+const LAUNCH_POLL_MS = 1000;
+const LAUNCH_GIVE_UP_MS = 10 * 60 * 1000;
+/** Steam shows its install prompt for games that are not installed. */
+const INSTALL_PROMPT_MS = 3000;
+let closingGame = false;
+
+/** Wait until the game shows a window ("ready"), or stops before that ("ended"). */
+async function waitForGame(): Promise<"ready" | "ended"> {
+  const until = Date.now() + LAUNCH_GIVE_UP_MS;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, LAUNCH_POLL_MS));
+    const state = await gameState();
+    if (state.ready) return "ready";
+    if (!state.running) return "ended";
+  }
+  return "ended";
+}
+
 /**
- * Starts a title through Steam, then keeps the "Starting..." screen up while
- * the game opens. gamescope moves focus to the game window when it appears and
- * back to the dashboard when it closes.
+ * Starts a title through Steam and resolves once its window is up, so the
+ * home screen can show a loader on the tile until then. gamescope moves focus
+ * to the game window when it appears and back to the dashboard when it closes.
  */
 async function launchTitle(title: Title): Promise<void> {
   sfx.launch();
+  closingGame = false;
   try {
     await startTitle(title);
   } catch (err) {
@@ -161,7 +181,14 @@ async function launchTitle(title: Title): Promise<void> {
   }
   gameTitle = title;
   inGame = true;
-  await new Promise((resolve) => setTimeout(resolve, 6000));
+  if (!title.installed) {
+    await new Promise((resolve) => setTimeout(resolve, INSTALL_PROMPT_MS));
+    return;
+  }
+  if ((await waitForGame()) === "ended" && !closingGame) {
+    sfx.error();
+    toast(`${title.name} did not start`, { silent: true });
+  }
 }
 
 /** Ask the backend to route every controller press to the menu, or back. */
@@ -232,6 +259,7 @@ async function resume() {
 }
 
 async function quit() {
+  closingGame = true;
   const name = gameTitle?.name ?? "the game";
   closeGameMenu();
   await gameAction("quit");

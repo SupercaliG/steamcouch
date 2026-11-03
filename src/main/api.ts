@@ -22,6 +22,8 @@ export interface ApiConfig {
   /** The running game (Home button menu). Absent in development. */
   game?: {
     running(): { gameId: string } | null;
+    /** The running game has shown a window. */
+    ready(): boolean;
     home(): Promise<void>;
     resume(): Promise<void>;
     quit(): Promise<void>;
@@ -184,7 +186,7 @@ export function createApi(config: ApiConfig) {
     }
 
     if (method === "GET" && path === "/api/game") {
-      return json({ running: config.game?.running()?.gameId ?? null });
+      return json({ running: config.game?.running()?.gameId ?? null, ready: config.game?.ready() ?? false });
     }
 
     if (method === "POST" && path === "/api/game" && body) {
