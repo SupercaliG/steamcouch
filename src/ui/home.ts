@@ -358,7 +358,14 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
    * `inLibrary` leaves out the menu entries that make no sense there.
    */
   function openOptions(title: Title, opts: { inLibrary?: boolean; onChange?: () => void } = {}) {
-    type Option = { label: string; checked?: () => boolean; run: () => void; keepOpen?: boolean };
+    type Option = {
+      label: string;
+      /** For on/off rows: the current state, and who it is about. */
+      checked?: () => boolean;
+      who?: Profile;
+      run: () => void;
+      keepOpen?: boolean;
+    };
     const options: Option[] = [
       {
         label: isFavorite(profile, title.id) ? "Remove from Favorites" : "Add to Favorites",
@@ -371,7 +378,8 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
         ? []
         : restrictedProfiles().map(
             (kid): Option => ({
-              label: `On ${possessive(kid.name)} dashboard`,
+              label: `${possessive(kid.name)} dashboard`,
+              who: kid,
               checked: () => getProfile(kid.id).allow.includes(title.id),
               keepOpen: true,
               run: () => {
@@ -392,9 +400,13 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
     let i = 0;
     const rows = options.map((o) => {
       if (!o.checked) return h("div.menu-item", {}, o.label);
-      const box = h("span.menu-check");
-      box.innerHTML = icons.check; // constant SVG markup
-      return h("div.menu-item.menu-toggle", {}, box, h("span", {}, o.label));
+      return h(
+        "div.menu-item.menu-toggle",
+        {},
+        o.who ? avatar(o.who, "menu-avatar") : null,
+        h("span.menu-toggle-label", {}, o.label),
+        h("span.menu-switch", {}, h("span.menu-knob")),
+      );
     });
     const menu = h("div.menu", {}, h("div.menu-title", {}, title.name), ...rows);
     const paint = () =>
