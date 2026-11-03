@@ -586,3 +586,13 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
 .hub-spinner { width: 26px; height: 26px; border-width: 3px; margin-right: 14px; }
 .hub-play:has(.hub-spinner) { display: flex; align-items: center; justify-content: center; }
 .hub-play.focused .hub-spinner { border-color: rgba(10, 13, 22, 0.2); border-top-color: #0a0d16; }
+
+/* Checkbox rows in the "..." menu (which kids see a title) */
+.menu-toggle { display: flex; align-items: center; gap: 16px; }
+.menu-check {
+  width: 28px; height: 28px; border-radius: 7px; padding: 3px; flex: none;
+  border: 2px solid rgba(255, 255, 255, 0.4); color: transparent;
+}
+.menu-toggle.on .menu-check { background: #2f7df6; border-color: #2f7df6; color: #fff; }
+.menu-toggle.focused .menu-check { border-color: rgba(10, 13, 22, 0.4); }
+.menu-toggle.focused.on .menu-check { border-color: #2f7df6; }

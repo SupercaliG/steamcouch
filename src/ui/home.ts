@@ -351,31 +351,57 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
     else void launch(item.title);
   }
 
-  function openOptions(title: Title) {
-    const options: { label: string; run: () => void }[] = [
+  /**
+   * The "..." menu of a title. For grown-ups it has a checkbox per kid
+   * profile: checked means the title is on that kid's dashboard. A press
+   * flips it and the menu stays open, so the change is visible right away.
+   * `inLibrary` leaves out the menu entries that make no sense there.
+   */
+  function openOptions(title: Title, opts: { inLibrary?: boolean; onChange?: () => void } = {}) {
+    type Option = { label: string; checked?: () => boolean; run: () => void; keepOpen?: boolean };
+    const options: Option[] = [
       {
         label: isFavorite(profile, title.id) ? "Remove from Favorites" : "Add to Favorites",
-        run: () => toggleFav(title),
+        run: () => {
+          toggleFav(title);
+          opts.onChange?.();
+        },
       },
       ...(profile.restricted
         ? []
-        : restrictedProfiles().map((kid) => {
-            const allowed = kid.allow.includes(title.id);
-            return {
-              label: allowed ? `Hide from ${kid.name}` : `Allow for ${kid.name}`,
+        : restrictedProfiles().map(
+            (kid): Option => ({
+              label: `On ${possessive(kid.name)} dashboard`,
+              checked: () => getProfile(kid.id).allow.includes(title.id),
+              keepOpen: true,
               run: () => {
+                const allowed = getProfile(kid.id).allow.includes(title.id);
                 setAllowed(kid.id, title.id, !allowed);
-                toast(allowed ? `${title.name} is hidden from ${kid.name}` : `${kid.name} can now see ${title.name}`);
+                toast(allowed ? `${title.name} removed from ${kid.name}` : `${title.name} added for ${kid.name}`);
+                opts.onChange?.();
               },
-            };
-          })),
-      { label: tab === "games" ? "Game Library" : "All Apps", run: openLibrary },
-      { label: "Switch Profile", run: cb.onSwitchProfile },
+            }),
+          )),
+      ...(opts.inLibrary
+        ? []
+        : [
+            { label: tab === "games" ? "Game Library" : "All Apps", run: openLibrary },
+            { label: "Switch Profile", run: cb.onSwitchProfile },
+          ]),
     ];
     let i = 0;
-    const rows = options.map((o) => h("div.menu-item", {}, o.label));
+    const rows = options.map((o) => {
+      if (!o.checked) return h("div.menu-item", {}, o.label);
+      const box = h("span.menu-check");
+      box.innerHTML = icons.check; // constant SVG markup
+      return h("div.menu-item.menu-toggle", {}, box, h("span", {}, o.label));
+    });
     const menu = h("div.menu", {}, h("div.menu-title", {}, title.name), ...rows);
-    const paint = () => rows.forEach((r, k) => r.classList.toggle("focused", k === i));
+    const paint = () =>
+      rows.forEach((r, k) => {
+        r.classList.toggle("focused", k === i);
+        r.classList.toggle("on", Boolean(options[k]!.checked?.()));
+      });
     paint();
     overlays.open({
       el: h("div.overlay.menu-overlay", {}, menu),
@@ -383,9 +409,10 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
         if (action === "up") i = clamp(i - 1, 0, options.length - 1);
         else if (action === "down") i = clamp(i + 1, 0, options.length - 1);
         else if (action === "accept") {
-          overlays.close();
-          options[i]!.run();
-          return;
+          const option = options[i]!;
+          if (!option.keepOpen) overlays.close();
+          option.run();
+          if (!option.keepOpen) return;
         } else if (action === "back" || action === "options") return overlays.close();
         paint();
       },
@@ -462,9 +489,10 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
           void launch(t);
           return;
         } else if (action === "options" && list[index]) {
-          toggleFav(list[index]!);
+          openOptions(list[index]!, { inLibrary: true, onChange: refresh });
+          return;
         } else return;
-        if (action === "tabPrev" || action === "tabNext" || action === "options") refresh();
+        if (action === "tabPrev" || action === "tabNext") refresh();
         else paint();
       },
     });
@@ -596,6 +624,11 @@ export function homeScreen(initialProfile: Profile, cb: HomeCallbacks): Screen {
 }
 
 // ---------- small builders ----------
+
+/** "Kids" -> "Kids'", "Emma" -> "Emma's". */
+function possessive(name: string): string {
+  return name.endsWith("s") ? `${name}'` : `${name}'s`;
+}
 
 function titleTile(title: Title, favorite: boolean, starting = false): HTMLElement {
   const tile = h("div.tile");
