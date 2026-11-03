@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { extname, join, normalize, sep } from "node:path";
 import { app, BrowserWindow, protocol } from "electron";
 import { createApi, type PowerAction } from "../src/main/api.ts";
-import { createFocusManager } from "./focus.ts";
+import { appIdFor, createFocusManager } from "./focus.ts";
 import { createInputPlumber, MODE_PASS, MODE_ALL } from "./inputplumber.ts";
 import { startPadGrab, type PadGrab } from "./padgrab.ts";
 import { changeVolume, systemStatus, toggleMute } from "./system.ts";
@@ -45,7 +45,7 @@ function run(cmd: string, args: string[]) {
   spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
 }
 
-const focus = createFocusManager();
+const focus = createFocusManager((msg) => log(msg));
 let win: BrowserWindow | null = null;
 
 const log = (msg: string) => console.log(`[steamcouch] ${msg}`);
@@ -96,14 +96,8 @@ async function releaseGrab() {
   await g?.release();
 }
 
-/** gamescope app id for a Steam game id (shortcuts carry it in the top 32 bits). */
 /** Big Picture must be open before a store link, or the link opens in the desktop client. */
 const STORE_LINK_DELAY_MS = 1500;
-
-function appIdFor(gameId: string): number {
-  const id = BigInt(gameId);
-  return id > 0xffffffffn ? Number(id >> 32n) : Number(id);
-}
 
 const handleApi = createApi({
   steamDir: steamRoot(),
@@ -137,7 +131,7 @@ const handleApi = createApi({
     close: async () => {
       // Back to the hidden desktop client, which ignores the controller.
       run("steam", ["steam://close/bigpicture"]);
-      await focus.reset();
+      await focus.leaveSteamUi(); // a game started from the store page stays in front
     },
   },
   power: (action: PowerAction) => {

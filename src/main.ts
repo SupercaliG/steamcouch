@@ -4,6 +4,7 @@ import { h } from "./dom";
 import { startInput, type Action } from "./input";
 import {
   allProfiles,
+  allTitles,
   closeStorePage,
   gameAction,
   gameRunning,
@@ -13,6 +14,7 @@ import {
   menuSounds,
   openStorePage,
   power,
+  runningGameId,
 } from "./store";
 import { sfx } from "./sound";
 import type { Profile, Title } from "./types";
@@ -108,18 +110,38 @@ async function leaveSteamStore() {
 let gameTitle: Title | null = null;
 let inGame = false;
 let gameMenu: { el: HTMLElement; handle(a: Action): void; destroy?(): void } | null = null;
-let watchTimer: ReturnType<typeof setInterval> | undefined;
+const GAME_POLL_MS = 2000;
 
-function watchGame() {
-  if (watchTimer) clearInterval(watchTimer);
-  watchTimer = setInterval(async () => {
-    if (await gameRunning()) return;
-    // The game closed (from its own menu, or crashed).
+/**
+ * Follow the game the backend follows. It also finds games the dashboard did
+ * not start (Steam's Play button, a launcher), so Home can still close them,
+ * and notices when a game closes by itself (its own menu, or a crash).
+ */
+setInterval(async () => {
+  if (opening) return;
+  const id = await runningGameId();
+  if (id && !inGame) {
+    gameTitle = allTitles().find((t) => t.launch.gameId === id) ?? unknownGame(id);
+    inGame = true;
+    if (inSteamStore) inSteamStore = false; // a game started from the store page
+  } else if (!id && inGame) {
     inGame = false;
     closeGameMenu();
-    clearInterval(watchTimer);
-    watchTimer = undefined;
-  }, 2000);
+  }
+}, GAME_POLL_MS);
+
+/** A running game that is not in the library list (new, or a shortcut we do not know). */
+function unknownGame(gameId: string): Title {
+  return {
+    id: `steam:${gameId}`,
+    kind: "game",
+    name: "Game",
+    tagline: "",
+    art: {},
+    source: "Steam",
+    installed: true,
+    launch: { type: "steam", gameId },
+  };
 }
 
 /**
@@ -139,7 +161,6 @@ async function launchTitle(title: Title): Promise<void> {
   }
   gameTitle = title;
   inGame = true;
-  watchGame();
   await new Promise((resolve) => setTimeout(resolve, 6000));
 }
 

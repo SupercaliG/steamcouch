@@ -239,11 +239,16 @@ export async function power(action: PowerAction): Promise<void> {
 
 /** True while a title started from the dashboard is still running. */
 export async function gameRunning(): Promise<boolean> {
+  return (await runningGameId()) !== null;
+}
+
+/** Steam game id of the game the dashboard follows, or null. */
+export async function runningGameId(): Promise<string | null> {
   try {
     const res = await fetch("/api/game");
-    return Boolean(((await res.json()) as { running: string | null }).running);
+    return ((await res.json()) as { running: string | null }).running;
   } catch {
-    return false;
+    return null;
   }
 }
 
