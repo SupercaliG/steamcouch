@@ -1,6 +1,7 @@
 // Steam Store screen, laid out like the PS5 store: Discover (rows of
-// trending, top sellers, deals, couch co-op, ...) and Browse (filters on the
-// left, results on the right). A game opens its page in Steam's own
+// trending, top sellers, deals, couch co-op, ...), Browse (filters on the
+// left, results on the right) and Search (on-screen keyboard, results as you
+// type). A game opens its page in Steam's own
 // controller-friendly store, where it can be bought; Home comes back here.
 
 import { clamp, formatClock, h, img } from "../dom";
@@ -9,12 +10,14 @@ import { ownedAppIds, storeBrowse, storeDiscover } from "../store";
 import {
   DEFAULT_FILTERS,
   GROUP_ORDER,
+  REQUIRED_FILTERS,
   SINGLE_CHOICE,
   STORE_FILTERS,
   type StoreFilter,
 } from "../store-filters";
 import type { StoreItem, StoreSection } from "../types";
 import { icons } from "./icons";
+import { keyboard } from "./keyboard";
 import { toast, type Screen } from "./screen";
 
 // Geometry (px on the 1920x1080 canvas).
@@ -26,8 +29,13 @@ const LOAD_MORE_ROWS = 2;
 const HERO_DELAY_MS = 140;
 const FILTER_DELAY_MS = 350;
 const VEIL_MS = 3500;
+const SEARCH_COLS = 4;
+const SEARCH_DELAY_MS = 450;
+const SEARCH_MIN_CHARS = 2;
+const SEARCH_MAX_CHARS = 40;
 
-type View = "discover" | "browse";
+const VIEWS = ["discover", "browse", "search"] as const;
+type View = (typeof VIEWS)[number];
 type PanelEntry = { kind: "group"; label: string } | { kind: "filter"; filter: StoreFilter };
 
 export interface ShopCallbacks {
@@ -57,6 +65,16 @@ export function shopScreen(cb: ShopCallbacks): Screen {
   let request = 0;
   let filterTimer: ReturnType<typeof setTimeout> | undefined;
 
+  // Search state.
+  let searchZone: "keys" | "toggle" | "grid" = "keys";
+  let searchControllerOnly = true;
+  let found: StoreItem[] = [];
+  let foundIndex = 0;
+  let foundNext: number | null = null;
+  let foundLoading = false;
+  let searchRequest = 0;
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
   // ---------- static DOM ----------
   const heroA = h("div.hero-layer");
   const heroB = h("div.hero-layer");
@@ -67,7 +85,9 @@ export function shopScreen(cb: ShopCallbacks): Screen {
   const tabEls: Record<View, HTMLElement> = {
     discover: h("div.top-tab", {}, "Discover"),
     browse: h("div.top-tab", {}, "Browse"),
+    search: h("div.top-tab.shop-search-tab", {}, h("span.shop-search-icon"), "Search"),
   };
+  (tabEls.search.firstChild as HTMLElement).innerHTML = icons.search; // constant SVG markup
   const brand = h("div.shop-brand", {}, h("span.shop-brand-icon"), "Steam Store");
   (brand.firstChild as HTMLElement).innerHTML = icons.store; // constant SVG markup
   const clockEl = h("div.top-clock", {}, formatClock(new Date()));
@@ -81,6 +101,7 @@ export function shopScreen(cb: ShopCallbacks): Screen {
       h("span.lib-hint", {}, "LB"),
       tabEls.discover,
       tabEls.browse,
+      tabEls.search,
       h("span.lib-hint", {}, "RB"),
     ),
     h("div.top-right", {}, clockEl),
@@ -104,6 +125,32 @@ export function shopScreen(cb: ShopCallbacks): Screen {
     h("div.shop-grid-wrap", {}, grid, gridStatus),
   );
 
+  // Search: typed text, keyboard and a controller filter on the left, results on the right.
+  const kb = keyboard({ maxLength: SEARCH_MAX_CHARS, onChange: () => scheduleSearch() });
+  const searchText = h("span.shop-search-text", { "data-placeholder": "Search the Steam Store" });
+  const searchBox = h("div.shop-search-box", {}, h("span.shop-search-box-icon"), searchText, h("span.shop-caret"));
+  (searchBox.firstChild as HTMLElement).innerHTML = icons.search; // constant SVG markup
+  const toggleCheck = h("span.shop-check");
+  toggleCheck.innerHTML = icons.check; // constant SVG markup
+  const toggleEl = h("div.shop-filter.shop-search-toggle", {}, toggleCheck, h("span", {}, "Only controller games"));
+  const foundHead = h(
+    "div.shop-search-head",
+    {},
+    h("span.lib-hint", {}, "B"),
+    " Delete    ",
+    h("span.lib-hint", {}, "Y"),
+    " Clear",
+  );
+  const foundGrid = h("div.shop-grid.shop-search-grid");
+  const foundStatus = h("div.shop-grid-status");
+  const searchEl = h(
+    "div.shop-search",
+    {},
+    h("div.shop-search-left", {}, searchBox, kb.el, toggleEl),
+    foundHead,
+    h("div.shop-grid-wrap.shop-search-wrap", {}, foundGrid, foundStatus),
+  );
+
   const statusEl = h("div.shop-status");
   const el = h(
     "section.screen.shop",
@@ -114,6 +161,7 @@ export function shopScreen(cb: ShopCallbacks): Screen {
     topbar,
     discoverEl,
     browseEl,
+    searchEl,
     statusEl,
   );
   const clockTimer = setInterval(() => (clockEl.textContent = formatClock(new Date())), 10_000);
@@ -121,6 +169,7 @@ export function shopScreen(cb: ShopCallbacks): Screen {
   // ---------- shared ----------
   function focusedItem(): StoreItem | undefined {
     if (view === "discover") return sections[row]?.items[cols[row] ?? 0];
+    if (view === "search") return searchZone === "grid" ? found[foundIndex] : undefined;
     return zone === "grid" ? results[gridIndex] : results[0];
   }
 
@@ -146,10 +195,10 @@ export function shopScreen(cb: ShopCallbacks): Screen {
   }
 
   function paintTabs() {
-    tabEls.discover.classList.toggle("active", view === "discover");
-    tabEls.browse.classList.toggle("active", view === "browse");
+    for (const v of VIEWS) tabEls[v].classList.toggle("active", view === v);
     discoverEl.classList.toggle("hidden", view !== "discover");
     browseEl.classList.toggle("hidden", view !== "browse");
+    searchEl.classList.toggle("hidden", view !== "search");
   }
 
   function setView(target: View) {
@@ -158,7 +207,8 @@ export function shopScreen(cb: ShopCallbacks): Screen {
     paintTabs();
     if (view === "browse" && results.length === 0 && next !== null) void loadResults(true);
     if (view === "discover") paintDiscover();
-    else paintBrowse();
+    else if (view === "browse") paintBrowse();
+    else paintSearch();
   }
 
   // ---------- Discover ----------
@@ -319,6 +369,121 @@ export function shopScreen(cb: ShopCallbacks): Screen {
     }
   }
 
+  // ---------- Search ----------
+  function paintSearch() {
+    const text = kb.text();
+    searchText.textContent = text;
+    searchBox.classList.toggle("empty", text === "");
+    kb.setActive(searchZone === "keys");
+    toggleEl.classList.toggle("on", searchControllerOnly);
+    toggleEl.classList.toggle("focused", searchZone === "toggle");
+
+    [...foundGrid.children].forEach((c, i) => c.classList.toggle("focused", searchZone === "grid" && i === foundIndex));
+    const focused = foundGrid.children[foundIndex] as HTMLElement | undefined;
+    const rowStep = foundGrid.children[SEARCH_COLS] ? (foundGrid.children[SEARCH_COLS] as HTMLElement).offsetTop : 0;
+    const top = searchZone === "grid" && focused ? focused.offsetTop : 0;
+    foundGrid.style.transform = `translateY(${-Math.max(0, top - rowStep)}px)`;
+    setHero(searchZone === "grid" ? found[foundIndex] : undefined);
+  }
+
+  /** Search a moment after the last key, so each letter does not start a new search. */
+  function scheduleSearch() {
+    clearTimeout(searchTimer);
+    paintSearch();
+    searchTimer = setTimeout(() => void loadSearch(true), SEARCH_DELAY_MS);
+  }
+
+  async function loadSearch(reset: boolean) {
+    const term = kb.text().trim();
+    const id = ++searchRequest;
+    if (reset) {
+      found = [];
+      foundIndex = 0;
+      foundNext = 0;
+      foundGrid.replaceChildren();
+      if (term.length < SEARCH_MIN_CHARS) {
+        foundNext = null;
+        foundStatus.replaceChildren("Type the name of a game");
+        if (searchZone === "grid") searchZone = "keys";
+        return paintSearch();
+      }
+      foundStatus.replaceChildren(h("div.spinner"), h("span", {}, "Searching"));
+    }
+    if (foundNext === null) return;
+    foundLoading = true;
+    try {
+      const page = await storeBrowse(searchControllerOnly ? REQUIRED_FILTERS : [], foundNext, term);
+      if (id !== searchRequest) return; // the text changed while searching
+      const seen = new Set(found.map((r) => r.appId));
+      const fresh = page.items.filter((it) => !seen.has(it.appId));
+      found.push(...fresh);
+      foundNext = page.next;
+      foundGrid.append(
+        ...fresh.map((it) => h("div.shop-item", {}, storeTile(it, owned), h("div.shop-item-name", {}, it.name))),
+      );
+      foundStatus.replaceChildren(
+        found.length
+          ? ""
+          : searchControllerOnly
+            ? `No controller games match "${term}". Turn off "Only controller games" to see every game.`
+            : `No games match "${term}"`,
+      );
+    } catch (err) {
+      console.error(err);
+      if (id === searchRequest) foundStatus.replaceChildren("Can't reach the Steam Store right now");
+    } finally {
+      if (id === searchRequest) foundLoading = false;
+    }
+    if (searchZone === "grid" && found.length === 0) searchZone = "keys";
+    paintSearch();
+  }
+
+  function handleSearch(action: Action) {
+    if (action === "options") {
+      kb.clear();
+      searchZone = "keys";
+      return paintSearch();
+    }
+    if (searchZone === "grid") {
+      const col = foundIndex % SEARCH_COLS;
+      if (action === "back" || (action === "left" && col === 0)) searchZone = "keys";
+      else if (action === "left") foundIndex -= 1;
+      else if (action === "right") foundIndex = clamp(foundIndex + 1, 0, found.length - 1);
+      else if (action === "up") foundIndex = foundIndex >= SEARCH_COLS ? foundIndex - SEARCH_COLS : foundIndex;
+      else if (action === "down") foundIndex = clamp(foundIndex + SEARCH_COLS, 0, found.length - 1);
+      else if (action === "accept") {
+        const item = found[foundIndex];
+        if (item) void open(item);
+        return;
+      } else return;
+      const rows = Math.ceil(found.length / SEARCH_COLS);
+      if (!foundLoading && foundNext !== null && Math.floor(foundIndex / SEARCH_COLS) >= rows - LOAD_MORE_ROWS) {
+        void loadSearch(false);
+      }
+      return paintSearch();
+    }
+    // B deletes a letter; with nothing typed it leaves the store.
+    if (action === "back") {
+      if (kb.text() === "") return cb.onBack();
+      return kb.deleteLast();
+    }
+    if (searchZone === "toggle") {
+      if (action === "up") searchZone = "keys";
+      else if (action === "right" && found.length) searchZone = "grid";
+      else if (action === "accept") {
+        searchControllerOnly = !searchControllerOnly;
+        void loadSearch(true);
+      } else return;
+      return paintSearch();
+    }
+    // Keys: the keyboard moves its own focus; at its edge, focus leaves it.
+    const edge = kb.handle(action);
+    if (edge === "right" && found.length) searchZone = "grid";
+    else if (edge === "down") searchZone = "toggle";
+    else return;
+    paintSearch();
+  }
+
   // ---------- opening a game ----------
   async function open(item: StoreItem) {
     if (busy) return;
@@ -352,8 +517,10 @@ export function shopScreen(cb: ShopCallbacks): Screen {
   // ---------- input ----------
   function handle(action: Action) {
     if (busy) return;
-    if (action === "tabPrev") return setView("discover");
-    if (action === "tabNext") return setView("browse");
+    const at = VIEWS.indexOf(view);
+    if (action === "tabPrev") return setView(VIEWS[Math.max(0, at - 1)]!);
+    if (action === "tabNext") return setView(VIEWS[Math.min(VIEWS.length - 1, at + 1)]!);
+    if (view === "search") return handleSearch(action);
 
     if (view === "discover") {
       if (!sections.length) {
@@ -408,6 +575,8 @@ export function shopScreen(cb: ShopCallbacks): Screen {
   }
 
   buildPanel();
+  foundStatus.replaceChildren("Type the name of a game");
+  paintSearch();
   paintTabs();
   void loadDiscover();
 
@@ -418,7 +587,9 @@ export function shopScreen(cb: ShopCallbacks): Screen {
       clearInterval(clockTimer);
       clearTimeout(heroTimer);
       clearTimeout(filterTimer);
+      clearTimeout(searchTimer);
       request++;
+      searchRequest++;
     },
   };
 }

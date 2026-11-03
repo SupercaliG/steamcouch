@@ -169,8 +169,8 @@ export function createSteamStore(country = storeCountry()) {
   }
 
   /** App ids from a store search, in Steam's order. Bundles and packages are skipped. */
-  function search(filterIds: string[], start: number, count: number): Promise<number[]> {
-    const params = searchParams(filterIds);
+  function search(filterIds: string[], start: number, count: number, term = ""): Promise<number[]> {
+    const params = searchParams(filterIds, term);
     params.set("json", "1");
     params.set("cc", country);
     params.set("l", "english");
@@ -219,9 +219,12 @@ export function createSteamStore(country = storeCountry()) {
       return sections;
     },
 
-    /** One page of Browse results; `next` is the start of the next page, or null at the end. */
-    async browse(filterIds: string[], start: number): Promise<{ items: StoreItem[]; next: number | null }> {
-      const ids = await search(filterIds, start, PAGE_SIZE);
+    /**
+     * One page of Browse or Search results (`term` = words typed in Search);
+     * `next` is the start of the next page, or null at the end.
+     */
+    async browse(filterIds: string[], start: number, term = ""): Promise<{ items: StoreItem[]; next: number | null }> {
+      const ids = await search(filterIds, start, PAGE_SIZE, term);
       return { items: await details(ids), next: ids.length < PAGE_SIZE ? null : start + ids.length };
     },
   };

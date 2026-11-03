@@ -121,9 +121,13 @@ export const DISCOVER_SECTIONS: StoreSectionDef[] = [
   { id: "soon", title: "Coming Soon", filters: ["sort-soon", "controller"] },
 ];
 
-/** Steam search parameters for a set of filter ids. Unknown ids are ignored. */
-export function searchParams(ids: string[]): URLSearchParams {
+/**
+ * Steam search parameters for a set of filter ids. Unknown ids are ignored.
+ * With a search term and no sort filter, Steam sorts by best match.
+ */
+export function searchParams(ids: string[], term = ""): URLSearchParams {
   const params = new URLSearchParams();
+  if (term) params.set("term", term);
   const multi: Record<string, string[]> = {};
   for (const f of STORE_FILTERS) {
     if (!ids.includes(f.id)) continue;
@@ -131,6 +135,6 @@ export function searchParams(ids: string[]): URLSearchParams {
     else params.set(f.param, f.value);
   }
   for (const [key, values] of Object.entries(multi)) params.set(key, values.join(","));
-  if (!params.has("filter") && !params.has("sort_by")) params.set("filter", "topsellers");
+  if (!term && !params.has("filter") && !params.has("sort_by")) params.set("filter", "topsellers");
   return params;
 }

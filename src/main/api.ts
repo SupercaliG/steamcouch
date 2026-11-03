@@ -71,6 +71,9 @@ export interface ApiResponse {
   body: string | Buffer;
 }
 
+/** Longest search text sent to Steam. */
+const MAX_SEARCH_LENGTH = 60;
+
 const IMAGE_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -276,8 +279,9 @@ export function createApi(config: ApiConfig) {
       const filters = (query.get("f") ?? "").split(",").filter((f) => /^[a-z0-9-]+$/.test(f));
       const start = Number(query.get("start") ?? 0);
       if (!Number.isInteger(start) || start < 0 || start > 5000) return json({ error: "bad start" }, 400);
+      const term = (query.get("q") ?? "").trim().slice(0, MAX_SEARCH_LENGTH);
       try {
-        return json(await store.browse(filters, start));
+        return json(await store.browse(filters, start, term));
       } catch (err) {
         return json({ error: String(err) }, 502);
       }

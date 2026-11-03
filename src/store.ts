@@ -267,8 +267,13 @@ export async function storeDiscover(): Promise<StoreSection[]> {
   return (await getJson<{ sections: StoreSection[] }>("/api/store/discover")).sections;
 }
 
-export function storeBrowse(filters: string[], start: number): Promise<{ items: StoreItem[]; next: number | null }> {
+export function storeBrowse(
+  filters: string[],
+  start: number,
+  term = "",
+): Promise<{ items: StoreItem[]; next: number | null }> {
   const q = new URLSearchParams({ f: filters.join(","), start: String(start) });
+  if (term) q.set("q", term);
   return getJson(`/api/store/browse?${q}`);
 }
 

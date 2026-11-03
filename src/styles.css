@@ -538,3 +538,36 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor
   position: absolute; left: 0; bottom: 70px; display: flex; align-items: center; gap: 8px;
   font-size: 21px; font-weight: 300; color: var(--ink-dim); white-space: pre;
 }
+
+/* Search (store) */
+.shop-search-tab { display: flex; align-items: center; gap: 12px; }
+.shop-search-icon { width: 30px; height: 30px; display: block; }
+.shop-search-left { position: absolute; left: 172px; top: 160px; width: 710px; }
+.shop-search-box {
+  height: 76px; border-radius: 38px; padding: 0 30px; display: flex; align-items: center; gap: 16px;
+  background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(14px);
+  font-size: 30px; font-weight: 400; white-space: pre; overflow: hidden;
+}
+.shop-search-box-icon { width: 30px; height: 30px; flex: none; color: var(--ink-dim); }
+.shop-search-box.empty .shop-search-text::before { content: attr(data-placeholder); color: var(--ink-dim); font-weight: 300; }
+.shop-search-box.empty .shop-caret { order: -1; margin-right: -16px; }
+.shop-caret { width: 2px; height: 36px; background: var(--ink); flex: none; animation: caret 1.1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.kb { margin-top: 30px; display: flex; flex-direction: column; gap: 10px; }
+.kb-row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 10px; }
+.kb-key {
+  height: 62px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.08); font-size: 27px; font-weight: 400;
+  transition: background 0.12s, color 0.12s, transform 0.12s var(--ease);
+}
+.kb-key.wide { font-size: 21px; }
+.kb-key.focused { background: #fff; color: #0a0d16; transform: scale(1.06); }
+.shop-search-toggle { margin-top: 26px; }
+.shop-search-head {
+  position: absolute; left: 960px; right: 172px; top: 168px;
+  display: flex; align-items: center; gap: 8px; white-space: pre;
+  font-size: 22px; font-weight: 300; color: var(--ink-dim);
+}
+.shop-search-wrap { left: 946px; }
+.shop-search-grid { grid-template-columns: repeat(4, 176px); }
+.shop-search-grid .shop-item .shop-card { width: 176px; }
